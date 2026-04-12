@@ -22,12 +22,16 @@
     box-sizing: border-box;
 }
 
+html, body {
+    height: 100%;
+    height: 100dvh;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: #2c1810;
     color: #2c1810;
     overflow: hidden;
-    height: 100vh;
     width: 100vw;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -41,13 +45,19 @@ body {
 .phone-frame {
     position: relative;
     width: 100%;
-    max-width: 420px;
     height: 100%;
-    max-height: 780px;
     background: var(--sand);
-    border-radius: 24px;
     overflow: hidden;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+
+/* На десктопе / планшетах — рамка */
+@media (min-width: 500px) {
+    .phone-frame {
+        max-width: 420px;
+        max-height: 900px;
+        border-radius: 24px;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    }
 }
 
 /* === Screens === */
