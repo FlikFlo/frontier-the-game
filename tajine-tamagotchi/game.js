@@ -1,620 +1,517 @@
-// Тажин Тамагочи - Game Logic
+// Тажин Тамагочи - Game Logic (Dopamine Edition)
 
 const RECIPES = [
-    {
-        id: 'chicken_olives',
-        name: 'Курица с оливками',
-        nameAr: 'طاجين الدجاج بالزيتون',
-        description: 'Классический марокканский тажин с курицей, оливками и консервированным лимоном',
-        ingredients: ['Курица', 'Оливки', 'Лимон', 'Лук', 'Чеснок'],
-        spices: ['Куркума', 'Имбирь', 'Кориандр'],
-        difficulty: 1,
-        cookTime: 120, // секунд игрового времени
-        unlocked: true,
-        icon: '🍋'
-    },
-    {
-        id: 'lamb_prunes',
-        name: 'Баранина с черносливом',
-        nameAr: 'طاجين اللحم بالبرقوق',
-        description: 'Сладко-солёный тажин с бараниной, черносливом и миндалём',
-        ingredients: ['Баранина', 'Чернослив', 'Миндаль', 'Лук', 'Мёд'],
-        spices: ['Корица', 'Имбирь', 'Шафран'],
-        difficulty: 2,
-        cookTime: 180,
-        unlocked: false,
-        starsToUnlock: 3,
-        icon: '🍖'
-    },
-    {
-        id: 'kefta_eggs',
-        name: 'Кефта с яйцом',
-        nameAr: 'كفتة بالبيض',
-        description: 'Пряные мясные шарики в томатном соусе с яйцом',
-        ingredients: ['Кефта', 'Томаты', 'Яйца', 'Лук', 'Петрушка'],
-        spices: ['Кумин', 'Паприка', 'Кориандр'],
-        difficulty: 1,
-        cookTime: 100,
-        unlocked: false,
-        starsToUnlock: 5,
-        icon: '🥚'
-    },
-    {
-        id: 'fish_chermoula',
-        name: 'Рыба по-марокански',
-        nameAr: 'طاجين السمك',
-        description: 'Рыба с овощами в пряном соусе чермула',
-        ingredients: ['Рыба', 'Перец', 'Томаты', 'Картофель', 'Чеснок'],
-        spices: ['Кумин', 'Паприка', 'Чермула'],
-        difficulty: 2,
-        cookTime: 150,
-        unlocked: false,
-        starsToUnlock: 8,
-        icon: '🐟'
-    },
-    {
-        id: 'veggie_seven',
-        name: 'Семь овощей',
-        nameAr: 'طاجين سبع خضار',
-        description: 'Традиционный овощной тажин с семью видами овощей',
-        ingredients: ['Морковь', 'Кабачок', 'Тыква', 'Турнепс', 'Капуста', 'Томаты', 'Нут'],
-        spices: ['Рас-эль-ханут', 'Куркума', 'Имбирь'],
-        difficulty: 3,
-        cookTime: 200,
-        unlocked: false,
-        starsToUnlock: 12,
-        icon: '🥕'
-    }
+    { id:'chicken_olives', name:'Курица с оливками', icon:'🍋', difficulty:1, cookTime:80, timeLimit:90, baseCoins:50, unlocked:true },
+    { id:'kefta_eggs', name:'Кефта с яйцом', icon:'🥚', difficulty:1, cookTime:70, timeLimit:80, baseCoins:60, unlocked:false, levelReq:2 },
+    { id:'lamb_prunes', name:'Баранина с черносливом', icon:'🍖', difficulty:2, cookTime:100, timeLimit:110, baseCoins:90, unlocked:false, levelReq:4 },
+    { id:'fish_chermoula', name:'Рыба по-марокански', icon:'🐟', difficulty:2, cookTime:90, timeLimit:100, baseCoins:100, unlocked:false, levelReq:6 },
+    { id:'veggie_seven', name:'Семь овощей', icon:'🥕', difficulty:3, cookTime:120, timeLimit:130, baseCoins:150, unlocked:false, levelReq:8 }
 ];
 
-const MESSAGES = {
-    fire_low: [
-        'Огонь угасает! Подбрось углей! 🔥',
-        'Тажин остывает... нужно больше жара!',
-        'Без огня ничего не сварится!'
-    ],
-    fire_high: [
-        'Слишком жарко! Блюдо подгорает! 😱',
-        'Убавь огонь! Тажин не сковородка!',
-        'Осторожно! Дно пригорает!'
-    ],
-    moisture_low: [
-        'Блюдо пересыхает! Добавь воды! 💧',
-        'Нужна влага, иначе всё пригорит!',
-        'Соус выкипает!'
-    ],
-    moisture_high: [
-        'Слишком много воды! Это тажин, не суп! 🥣',
-        'Воды многовато... соус слишком жидкий',
-        'Подожди, пусть выпарится лишняя влага'
-    ],
-    flavor_low: [
-        'Пресновато... добавь специй! 🌶️',
-        'Где вкус? Нужны специи!',
-        'Марокканский тажин без специй — это не тажин!'
-    ],
-    flavor_high: [
-        'Ой! Слишком много специй! 🥵',
-        'Рот горит! Перебор со специями!',
-        'Полегче со специями, шеф!'
-    ],
-    perfect: [
-        'Идеально! Всё в балансе! ✨',
-        'Отличная работа! Тажин пахнет изумительно! 😍',
-        'Марокканская бабушка бы одобрила! 👵'
-    ],
-    stir: [
-        'Аккуратно перемешиваем... 🥄',
-        'Соус равномерно покрывает ингредиенты!',
-        'Размешали! Ароматы смешиваются!'
-    ],
-    almost_done: [
-        'Почти готово! Ещё чуть-чуть! ⏰',
-        'Запах потрясающий! Скоро будет готово!',
-        'Финишная прямая! Держим температуру!'
-    ]
+const RANDOM_EVENTS = [
+    { icon:'🐱', text:'Кот тянется к еде!', reward:'coins', amount:20 },
+    { icon:'💨', text:'Ветер раздул огонь!', effect:'heat', value:25 },
+    { icon:'🧂', text:'Торговец специй!', reward:'flavor', amount:30 },
+    { icon:'👵', text:'Бабушка заглянула попробовать!', reward:'coins', amount:30 },
+    { icon:'💧', text:'Пролили воду!', effect:'moisture', value:-20 },
+    { icon:'⭐', text:'Удача! Бонус!', reward:'coins', amount:50 }
+];
+
+const LEVEL_UNLOCKS = {
+    2: 'Открыт рецепт: Кефта с яйцом 🥚',
+    3: 'Комбо х3 теперь доступно!',
+    4: 'Открыт рецепт: Баранина 🍖',
+    5: 'Бонус к чаевым +20%',
+    6: 'Открыт рецепт: Рыба 🐟',
+    8: 'Открыт рецепт: Семь овощей 🥕',
+    10: 'Все рецепты открыты! 🏆'
 };
 
-const ACHIEVEMENTS = [
-    { id: 'first_cook', name: 'Первый тажин', desc: 'Приготовь первое блюдо', icon: '👨‍🍳' },
-    { id: 'five_stars', name: 'Пять звёзд', desc: 'Получи 5 звёзд за блюдо', icon: '⭐' },
-    { id: 'fire_master', name: 'Мастер огня', desc: 'Держи идеальный огонь 30 секунд', icon: '🔥' },
-    { id: 'spice_king', name: 'Король специй', desc: 'Используй специи 20 раз за игру', icon: '👑' },
-    { id: 'all_recipes', name: 'Шеф-повар', desc: 'Открой все рецепты', icon: '📖' },
-    { id: 'ten_dishes', name: 'Опытный повар', desc: 'Приготовь 10 блюд', icon: '🏆' }
-];
+function xpForLevel(lvl) { return 100 + (lvl - 1) * 80; }
 
 class TajineGame {
     constructor() {
-        this.state = {
-            heat: 50,
-            moisture: 50,
-            flavor: 0,
-            doneness: 0
-        };
+        this.state = { heat:50, moisture:50, flavor:0, doneness:0 };
         this.currentRecipe = null;
         this.gameInterval = null;
         this.elapsed = 0;
+        this.timeLeft = 0;
         this.isPlaying = false;
-        this.spiceUses = 0;
-        this.perfectFireTime = 0;
+        this.combo = 0;
+        this.comboMax = 0;
         this.stirCooldown = false;
+        this.currentEvent = null;
+        this.eventTimer = 0;
+        this.lastEventTime = 0;
+        this.sessionEarnings = { coins:0, xp:0, tips:0 };
 
         this.loadProgress();
-        this.init();
-    }
-
-    init() {
+        this.updateMenuStats();
         this.showMenu();
     }
 
-    // === Навигация ===
+    // === Save / Load ===
+    loadProgress() {
+        const saved = localStorage.getItem('tajine_v2');
+        if (saved) { this.progress = JSON.parse(saved); return; }
+        this.progress = {
+            coins: 100, xp: 0, level: 1,
+            totalDishes: 0, totalStars: 0,
+            bestScores: {}, achievements: []
+        };
+    }
+    saveProgress() { localStorage.setItem('tajine_v2', JSON.stringify(this.progress)); }
 
-    showScreen(screenId) {
+    // === Navigation ===
+    showScreen(id) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        document.getElementById(screenId).classList.add('active');
+        document.getElementById(id).classList.add('active');
+    }
+    showMenu() { this.stopGame(); this.updateMenuStats(); this.showScreen('screen-menu'); }
+    showRecipeSelect() { this.renderRecipes(); this.showScreen('screen-recipes'); }
+    showCollection() { this.renderCollection(); this.showScreen('screen-collection'); }
+
+    updateMenuStats() {
+        document.getElementById('menu-coins').textContent = this.progress.coins;
+        document.getElementById('menu-level').textContent = this.progress.level;
     }
 
-    showMenu() {
-        this.stopGame();
-        this.showScreen('screen-menu');
-    }
-
-    showRecipeSelect() {
-        this.renderRecipes();
-        this.showScreen('screen-recipes');
-    }
-
-    showCollection() {
-        this.renderCollection();
-        this.showScreen('screen-collection');
-    }
-
-    // === Рецепты ===
-
+    // === Recipes ===
     renderRecipes() {
         const list = document.getElementById('recipes-list');
         list.innerHTML = '';
-
-        RECIPES.forEach((recipe, index) => {
-            const isUnlocked = recipe.unlocked || this.progress.totalStars >= (recipe.starsToUnlock || 0);
+        RECIPES.forEach((r, i) => {
+            const unlocked = r.unlocked || this.progress.level >= (r.levelReq || 0);
             const card = document.createElement('div');
-            card.className = `recipe-card ${isUnlocked ? '' : 'locked'}`;
-
-            if (isUnlocked) {
-                card.onclick = () => this.startGame(index);
+            card.className = `recipe-card ${unlocked ? '' : 'locked'}`;
+            if (unlocked) {
+                card.onclick = () => this.startGame(i);
+                const best = this.progress.bestScores[r.id] || 0;
                 card.innerHTML = `
-                    <div class="recipe-icon">${recipe.icon}</div>
+                    <div class="recipe-icon">${r.icon}</div>
                     <div class="recipe-info">
-                        <h3>${recipe.name}</h3>
-                        <p class="recipe-ar">${recipe.nameAr}</p>
-                        <p class="recipe-desc">${recipe.description}</p>
-                        <div class="recipe-meta">
-                            <span class="difficulty">${'🌶️'.repeat(recipe.difficulty)}</span>
-                            <span class="best-stars">${this.getRecipeBestStars(recipe.id)}</span>
-                        </div>
-                    </div>
-                `;
+                        <h3>${r.name}</h3>
+                        <p class="recipe-desc">⏱ ${r.timeLimit}с · ${'🌶️'.repeat(r.difficulty)} · 🪙 ${r.baseCoins}+</p>
+                        <div class="recipe-meta">${best ? '⭐'.repeat(best) : ''}</div>
+                    </div>`;
             } else {
                 card.innerHTML = `
                     <div class="recipe-icon">🔒</div>
                     <div class="recipe-info">
-                        <h3>${recipe.name}</h3>
-                        <p class="recipe-desc">Нужно ${recipe.starsToUnlock} ⭐ (у тебя: ${this.progress.totalStars})</p>
-                    </div>
-                `;
+                        <h3>${r.name}</h3>
+                        <p class="recipe-desc">Открой на уровне ${r.levelReq}</p>
+                    </div>`;
             }
-
             list.appendChild(card);
         });
     }
 
-    getRecipeBestStars(recipeId) {
-        const best = this.progress.bestScores[recipeId] || 0;
-        if (best === 0) return '';
-        return '⭐'.repeat(best);
-    }
-
-    // === Игровой процесс ===
-
-    startGame(recipeIndex) {
-        this.currentRecipe = RECIPES[recipeIndex];
-        this.state = {
-            heat: 50,
-            moisture: 50,
-            flavor: 0,
-            doneness: 0
-        };
+    // === Game Start ===
+    startGame(idx) {
+        this.currentRecipe = RECIPES[idx];
+        this.state = { heat:50, moisture:50, flavor:0, doneness:0 };
         this.elapsed = 0;
-        this.spiceUses = 0;
-        this.perfectFireTime = 0;
+        this.timeLeft = this.currentRecipe.timeLimit;
+        this.combo = 0; this.comboMax = 0;
+        this.lastEventTime = 0;
+        this.sessionEarnings = { coins:0, xp:0, tips:0 };
         this.isPlaying = true;
 
         document.getElementById('current-recipe-name').textContent = this.currentRecipe.name;
         this.updateUI();
+        this.updateVisuals();
         this.showScreen('screen-game');
-        this.showMessage(`Готовим: ${this.currentRecipe.name}! ${this.currentRecipe.icon}`);
+        this.showMessage(`Заказ: ${this.currentRecipe.name} ${this.currentRecipe.icon}`);
 
-        this.gameInterval = setInterval(() => this.gameTick(), 1000);
+        this.gameInterval = setInterval(() => this.tick(), 1000);
     }
 
     stopGame() {
-        if (this.gameInterval) {
-            clearInterval(this.gameInterval);
-            this.gameInterval = null;
-        }
+        if (this.gameInterval) { clearInterval(this.gameInterval); this.gameInterval = null; }
         this.isPlaying = false;
+        this.hideEvent();
     }
 
-    gameTick() {
+    // === Main Tick ===
+    tick() {
         if (!this.isPlaying) return;
-
         this.elapsed++;
+        this.timeLeft--;
 
-        // Огонь медленно угасает
+        // Параметры
         this.state.heat = Math.max(0, this.state.heat - 1.5);
+        const evap = 0.5 + (this.state.heat / 100) * 1.3;
+        this.state.moisture = Math.max(0, this.state.moisture - evap);
+        if (this.state.flavor > 65) this.state.flavor = Math.max(0, this.state.flavor - 0.2);
 
-        // Влага испаряется (быстрее при высоком огне)
-        const evapRate = 0.5 + (this.state.heat / 100) * 1.5;
-        this.state.moisture = Math.max(0, this.state.moisture - evapRate);
+        // Зоны
+        const heatOk = this.state.heat >= 35 && this.state.heat <= 65;
+        const moistOk = this.state.moisture >= 25 && this.state.moisture <= 60;
+        const flavOk = this.state.flavor >= 45 && this.state.flavor <= 75;
+        const allOk = heatOk && moistOk && flavOk;
 
-        // Вкус слегка рассеивается если не мешать
-        if (this.state.flavor > 60) {
-            this.state.flavor = Math.max(0, this.state.flavor - 0.2);
-        }
-
-        // Готовность растёт если параметры в норме
-        const heatOk = this.state.heat >= 40 && this.state.heat <= 70;
-        const moistureOk = this.state.moisture >= 30 && this.state.moisture <= 60;
-
-        if (heatOk && moistureOk) {
-            const bonus = (this.state.flavor >= 50 && this.state.flavor <= 80) ? 1.5 : 1;
-            this.state.doneness = Math.min(100, this.state.doneness + (100 / this.currentRecipe.cookTime) * bonus);
-            this.perfectFireTime++;
-        } else if (this.state.heat > 20 && this.state.moisture > 10) {
+        // Прогресс
+        if (heatOk && moistOk) {
+            const mult = flavOk ? 1.6 : 1;
+            this.state.doneness = Math.min(100, this.state.doneness + (100 / this.currentRecipe.cookTime) * mult);
+        } else if (this.state.heat > 20) {
             this.state.doneness = Math.min(100, this.state.doneness + (100 / this.currentRecipe.cookTime) * 0.3);
         }
 
-        // Проверяем критические состояния
-        if (this.state.heat <= 0 && this.state.doneness < 100) {
-            this.showMessage(this.getRandomMessage('fire_low'));
-        } else if (this.state.heat > 80) {
-            this.showMessage(this.getRandomMessage('fire_high'));
-        } else if (this.state.moisture < 20 && this.state.moisture > 0) {
-            this.showMessage(this.getRandomMessage('moisture_low'));
-        } else if (this.state.doneness > 85 && this.state.doneness < 100) {
-            this.showMessage(this.getRandomMessage('almost_done'));
+        // Комбо — растёт когда все 3 параметра в зоне
+        if (allOk) {
+            this.combo++;
+            if (this.combo > this.comboMax) this.comboMax = this.combo;
+            if (this.combo === 3 || this.combo === 5 || this.combo === 8 || this.combo === 12) {
+                this.spawnFloatText(`КОМБО x${Math.floor(this.combo/3)+1}!`, 50, 35);
+                this.shakeScreen();
+            }
+        } else {
+            if (this.combo >= 3) this.showMessage('Комбо сброшено!');
+            this.combo = 0;
         }
 
-        // Обновляем визуал
+        // Случайные события (раз в 12-20 секунд)
+        if (!this.currentEvent && this.elapsed - this.lastEventTime > 12 && Math.random() < 0.15) {
+            this.triggerEvent();
+        }
+
+        // Критические предупреждения
+        if (this.timeLeft === 15) this.showMessage('⏰ Осталось 15 секунд!');
+        if (this.state.heat <= 0) this.showMessage('Огонь погас! 🔥');
+        else if (this.state.heat > 85) this.showMessage('Слишком горячо! 😱');
+
         this.updateUI();
         this.updateVisuals();
 
-        // Проверяем завершение
-        if (this.state.doneness >= 100) {
-            this.finishCooking();
-        }
+        if (this.state.doneness >= 100) { this.finishCooking(true); return; }
+        if (this.timeLeft <= 0) { this.finishCooking(false); return; }
     }
 
-    // === Действия игрока ===
-
+    // === Player Actions ===
     addFire() {
         if (!this.isPlaying) return;
         this.state.heat = Math.min(100, this.state.heat + 15);
-        this.animateButton('btn-fire');
-        this.updateUI();
-
-        if (this.state.heat > 80) {
-            this.showMessage(this.getRandomMessage('fire_high'));
-        }
+        this.bump('btn-fire');
+        this.updateUI(); this.updateVisuals();
     }
-
     addWater() {
         if (!this.isPlaying) return;
-        this.state.moisture = Math.min(100, this.state.moisture + 20);
-        this.animateButton('btn-water');
-        this.updateUI();
-
-        if (this.state.moisture > 80) {
-            this.showMessage(this.getRandomMessage('moisture_high'));
-        }
+        this.state.moisture = Math.min(100, this.state.moisture + 22);
+        this.bump('btn-water');
+        this.updateUI(); this.updateVisuals();
     }
-
     addSpice() {
         if (!this.isPlaying) return;
-        this.state.flavor = Math.min(100, this.state.flavor + 12);
-        this.spiceUses++;
-        this.animateButton('btn-spice');
+        this.state.flavor = Math.min(100, this.state.flavor + 14);
+        this.bump('btn-spice');
         this.updateUI();
-
-        if (this.state.flavor > 90) {
-            this.showMessage(this.getRandomMessage('flavor_high'));
-        } else if (this.state.flavor >= 50 && this.state.flavor <= 80) {
-            this.showMessage(this.getRandomMessage('perfect'));
-        }
     }
-
     stir() {
         if (!this.isPlaying || this.stirCooldown) return;
-
-        // Перемешивание балансирует параметры
-        if (this.state.heat > 70) this.state.heat -= 5;
-        if (this.state.moisture > 60) this.state.moisture -= 3;
+        if (this.state.heat > 70) this.state.heat -= 6;
+        if (this.state.moisture > 60) this.state.moisture -= 4;
         if (this.state.flavor > 80) this.state.flavor -= 5;
-
-        // Небольшой бонус к готовности
-        this.state.doneness = Math.min(100, this.state.doneness + 2);
-
-        this.animateButton('btn-stir');
-        this.showMessage(this.getRandomMessage('stir'));
-        this.updateUI();
-
-        // Кулдаун на перемешивание
+        this.state.doneness = Math.min(100, this.state.doneness + 3);
+        this.bump('btn-stir');
         this.stirCooldown = true;
-        document.getElementById('btn-stir').classList.add('cooldown');
-        setTimeout(() => {
-            this.stirCooldown = false;
-            document.getElementById('btn-stir').classList.remove('cooldown');
-        }, 3000);
+        const b = document.getElementById('btn-stir');
+        b.classList.add('cooldown');
+        setTimeout(() => { this.stirCooldown = false; b.classList.remove('cooldown'); }, 2500);
+        this.updateUI();
     }
 
-    // === Визуальные обновления ===
+    // === Events ===
+    triggerEvent() {
+        const ev = RANDOM_EVENTS[Math.floor(Math.random() * RANDOM_EVENTS.length)];
+        this.currentEvent = ev;
+        this.lastEventTime = this.elapsed;
+        document.getElementById('event-icon').textContent = ev.icon;
+        document.getElementById('event-text').textContent = ev.text;
+        document.getElementById('event-popup').classList.add('active');
+        // Автозакрытие через 4 секунды
+        this.eventTimer = setTimeout(() => this.missEvent(), 4000);
+    }
+    handleEvent() {
+        if (!this.currentEvent) return;
+        clearTimeout(this.eventTimer);
+        const ev = this.currentEvent;
+        if (ev.reward === 'coins') {
+            this.sessionEarnings.tips += ev.amount;
+            this.spawnFloatText(`+${ev.amount} 🪙`, 50, 30);
+            this.spawnCoins(ev.amount / 10, 50, 30);
+        } else if (ev.reward === 'flavor') {
+            this.state.flavor = Math.min(100, this.state.flavor + ev.amount);
+            this.spawnFloatText('+Вкус!', 50, 30);
+        } else if (ev.effect === 'heat') {
+            this.state.heat = Math.min(100, this.state.heat + ev.value);
+            this.spawnFloatText('+Огонь', 50, 30);
+        } else if (ev.effect === 'moisture') {
+            this.state.moisture = Math.max(0, this.state.moisture + ev.value);
+            this.spawnFloatText(ev.value > 0 ? '+Вода' : '-Вода', 50, 30);
+        }
+        this.hideEvent();
+        this.shakeScreen();
+    }
+    missEvent() {
+        if (!this.currentEvent) return;
+        const ev = this.currentEvent;
+        if (ev.effect === 'heat') this.state.heat = Math.min(100, this.state.heat + ev.value);
+        if (ev.effect === 'moisture') this.state.moisture = Math.max(0, this.state.moisture + ev.value);
+        this.showMessage('Событие пропущено...');
+        this.hideEvent();
+    }
+    hideEvent() {
+        this.currentEvent = null;
+        document.getElementById('event-popup').classList.remove('active');
+    }
 
+    // === UI Updates ===
     updateUI() {
-        // Обновляем шкалы
         document.getElementById('bar-heat').style.width = this.state.heat + '%';
         document.getElementById('bar-moisture').style.width = this.state.moisture + '%';
         document.getElementById('bar-flavor').style.width = this.state.flavor + '%';
         document.getElementById('bar-doneness').style.width = this.state.doneness + '%';
 
-        // Обновляем числа
-        document.getElementById('val-heat').textContent = Math.round(this.state.heat);
-        document.getElementById('val-moisture').textContent = Math.round(this.state.moisture);
-        document.getElementById('val-flavor').textContent = Math.round(this.state.flavor);
-        document.getElementById('val-doneness').textContent = Math.round(this.state.doneness) + '%';
+        this.updateZone('bar-heat', this.state.heat, 35, 65);
+        this.updateZone('bar-moisture', this.state.moisture, 25, 60);
+        this.updateZone('bar-flavor', this.state.flavor, 45, 75);
 
-        // Обновляем таймер
-        const mins = Math.floor(this.elapsed / 60);
-        const secs = this.elapsed % 60;
-        document.getElementById('game-timer').textContent =
-            `${mins}:${secs.toString().padStart(2, '0')}`;
+        // Таймер
+        const timer = document.getElementById('order-timer');
+        const fill = document.getElementById('order-timer-fill');
+        const text = document.getElementById('order-timer-text');
+        const pct = Math.max(0, this.timeLeft / this.currentRecipe.timeLimit);
+        fill.style.height = (pct * 100) + '%';
+        text.textContent = this.timeLeft;
+        timer.classList.toggle('warn', this.timeLeft <= 30 && this.timeLeft > 15);
+        timer.classList.toggle('danger', this.timeLeft <= 15);
 
-        // Цвет шкал по состоянию
-        this.updateBarColor('bar-heat', this.state.heat, 40, 70);
-        this.updateBarColor('bar-moisture', this.state.moisture, 30, 60);
-        this.updateBarColor('bar-flavor', this.state.flavor, 50, 80);
-    }
-
-    updateBarColor(barId, value, min, max) {
-        const bar = document.getElementById(barId);
-        if (value >= min && value <= max) {
-            bar.classList.add('in-zone');
-            bar.classList.remove('danger');
-        } else if (value < min * 0.5 || value > max * 1.3) {
-            bar.classList.remove('in-zone');
-            bar.classList.add('danger');
+        // Комбо
+        const cd = document.getElementById('combo-display');
+        if (this.combo >= 3) {
+            cd.classList.add('visible');
+            cd.classList.toggle('super', this.combo >= 8);
+            const mult = Math.floor(this.combo / 3) + 1;
+            document.getElementById('combo-mult').textContent = 'x' + mult;
+            document.getElementById('combo-text').textContent = this.combo >= 8 ? 'СУПЕР!' : 'КОМБО';
         } else {
-            bar.classList.remove('in-zone', 'danger');
+            cd.classList.remove('visible');
         }
     }
-
+    updateZone(id, v, min, max) {
+        const b = document.getElementById(id);
+        if (v >= min && v <= max) { b.classList.add('in-zone'); b.classList.remove('danger'); }
+        else if (v < min * 0.5 || v > max * 1.3) { b.classList.remove('in-zone'); b.classList.add('danger'); }
+        else { b.classList.remove('in-zone', 'danger'); }
+    }
     updateVisuals() {
-        // Огонь
-        const fireContainer = document.getElementById('fire-container');
-        if (this.state.heat > 60) {
-            fireContainer.className = 'fire-container fire-high';
-        } else if (this.state.heat > 30) {
-            fireContainer.className = 'fire-container fire-medium';
-        } else if (this.state.heat > 10) {
-            fireContainer.className = 'fire-container fire-low';
-        } else {
-            fireContainer.className = 'fire-container fire-out';
-        }
+        const fc = document.getElementById('fire-container');
+        if (this.state.heat > 60) fc.className = 'fire-container fire-high';
+        else if (this.state.heat > 30) fc.className = 'fire-container fire-medium';
+        else if (this.state.heat > 10) fc.className = 'fire-container fire-low';
+        else fc.className = 'fire-container fire-out';
 
-        // Пар
-        const steamContainer = document.getElementById('steam-container');
-        if (this.state.heat > 40 && this.state.moisture > 20) {
-            steamContainer.classList.add('active');
-        } else {
-            steamContainer.classList.remove('active');
-        }
+        document.getElementById('steam-container').classList.toggle('active', this.state.heat > 40 && this.state.moisture > 20);
+        document.getElementById('tajine-lid').classList.toggle('shaking', this.state.heat > 70 && this.state.moisture > 50);
 
-        // Крышка тажина - дрожит при высоком давлении
-        const lid = document.getElementById('tajine-lid');
-        if (this.state.heat > 70 && this.state.moisture > 50) {
-            lid.classList.add('shaking');
-        } else {
-            lid.classList.remove('shaking');
-        }
-
-        // Цвет еды в тажине
         const food = document.getElementById('tajine-food');
-        const doneColor = Math.min(100, this.state.doneness);
-        food.style.background = `hsl(${30 - doneColor * 0.15}, ${60 + doneColor * 0.3}%, ${50 - doneColor * 0.15}%)`;
+        const d = Math.min(100, this.state.doneness);
+        food.style.background = `hsl(${30 - d * 0.15}, ${60 + d * 0.3}%, ${50 - d * 0.15}%)`;
     }
 
-    // === Завершение готовки ===
-
-    finishCooking() {
+    // === Finish ===
+    finishCooking(completed) {
         this.stopGame();
+        const stars = completed ? this.calcStars() : 1;
 
-        const score = this.calculateScore();
-        const stars = this.calculateStars(score);
+        // Награды
+        const base = this.currentRecipe.baseCoins;
+        const starMult = [0, 0.5, 0.8, 1.0, 1.3, 1.7][stars];
+        const comboBonus = Math.floor(this.comboMax / 3) * 15;
+        const timeBonus = completed ? Math.max(0, Math.floor(this.timeLeft * 0.5)) : 0;
+        const tipBonus = this.sessionEarnings.tips;
+        const totalCoins = Math.floor(base * starMult + comboBonus + timeBonus + tipBonus);
+        const xpGain = stars * 25 + Math.floor(this.comboMax * 2);
 
-        this.saveResult(stars);
-        this.showResult(stars, score);
+        this.sessionEarnings.coins = totalCoins;
+        this.sessionEarnings.xp = xpGain;
+        this.sessionEarnings.breakdown = { base: Math.floor(base * starMult), combo: comboBonus, time: timeBonus, tips: tipBonus };
+
+        // Обновляем прогресс
+        this.progress.coins += totalCoins;
+        this.progress.xp += xpGain;
+        this.progress.totalDishes++;
+        this.progress.totalStars += stars;
+        const rid = this.currentRecipe.id;
+        if (!this.progress.bestScores[rid] || stars > this.progress.bestScores[rid]) {
+            this.progress.bestScores[rid] = stars;
+        }
+
+        // Level up?
+        let leveledUp = false;
+        while (this.progress.xp >= xpForLevel(this.progress.level)) {
+            this.progress.xp -= xpForLevel(this.progress.level);
+            this.progress.level++;
+            leveledUp = true;
+        }
+
+        this.saveProgress();
+        this.showResult(stars, completed);
+
+        if (leveledUp) {
+            setTimeout(() => this.showLevelUp(), 1800);
+        }
     }
-
-    calculateScore() {
-        let score = 0;
-
-        // Оценка по параметрам в момент завершения
-        const heatScore = this.getZoneScore(this.state.heat, 40, 70);
-        const moistureScore = this.getZoneScore(this.state.moisture, 30, 60);
-        const flavorScore = this.getZoneScore(this.state.flavor, 50, 80);
-
-        score = (heatScore + moistureScore + flavorScore) / 3;
-
-        return Math.round(score * 100);
+    calcStars() {
+        const h = this.zoneScore(this.state.heat, 35, 65);
+        const m = this.zoneScore(this.state.moisture, 25, 60);
+        const f = this.zoneScore(this.state.flavor, 45, 75);
+        const avg = (h + m + f) / 3;
+        const comboBonus = Math.min(0.15, this.comboMax * 0.01);
+        const score = avg + comboBonus;
+        if (score >= 0.92) return 5;
+        if (score >= 0.78) return 4;
+        if (score >= 0.6) return 3;
+        if (score >= 0.4) return 2;
+        return 1;
     }
-
-    getZoneScore(value, min, max) {
-        const center = (min + max) / 2;
-        const range = (max - min) / 2;
-        const distance = Math.abs(value - center);
-
-        if (distance <= range) return 1;
-        if (distance <= range * 2) return 0.6;
+    zoneScore(v, min, max) {
+        const c = (min + max) / 2, r = (max - min) / 2;
+        const d = Math.abs(v - c);
+        if (d <= r) return 1;
+        if (d <= r * 2) return 0.6;
         return 0.3;
     }
 
-    calculateStars(score) {
-        if (score >= 90) return 5;
-        if (score >= 75) return 4;
-        if (score >= 55) return 3;
-        if (score >= 35) return 2;
-        return 1;
-    }
-
-    showResult(stars, score) {
-        const container = document.getElementById('stars-container');
-        container.innerHTML = '';
+    // === Result Screen ===
+    showResult(stars, completed) {
+        document.getElementById('result-title').textContent = completed ? 'Блюдо готово!' : 'Время вышло!';
+        const sc = document.getElementById('stars-container');
+        sc.innerHTML = '';
         for (let i = 0; i < 5; i++) {
-            const star = document.createElement('span');
-            star.className = `result-star ${i < stars ? 'earned' : ''}`;
-            star.textContent = '⭐';
-            star.style.animationDelay = `${i * 0.2}s`;
-            container.appendChild(star);
+            const s = document.createElement('span');
+            s.className = 'result-star' + (i < stars ? ' earned' : '');
+            s.textContent = '⭐';
+            s.style.animationDelay = (i * 0.2) + 's';
+            sc.appendChild(s);
         }
-
         const comments = {
-            5: 'Превосходно! Настоящий марокканский шедевр! 🏆',
-            4: 'Очень вкусно! Почти идеально! 👨‍🍳',
-            3: 'Неплохо! Есть куда расти! 👍',
-            2: 'Ммм... съедобно, но нужно практиковаться 😅',
-            1: 'Может, закажем пиццу? 🍕'
+            5:'🏆 Шедевр! Клиент в восторге!',
+            4:'👨‍🍳 Отлично! Хорошие чаевые!',
+            3:'👍 Норм, но можно лучше',
+            2:'😅 Съедобно...',
+            1:'🍕 Может закажем пиццу?'
         };
-
         document.getElementById('result-comment').textContent = comments[stars];
 
-        document.getElementById('result-stats').innerHTML = `
-            <div class="result-stat">🔥 Огонь: ${Math.round(this.state.heat)}</div>
-            <div class="result-stat">💧 Влага: ${Math.round(this.state.moisture)}</div>
-            <div class="result-stat">🌶️ Вкус: ${Math.round(this.state.flavor)}</div>
-            <div class="result-stat">⏱️ Время: ${Math.floor(this.elapsed / 60)}:${(this.elapsed % 60).toString().padStart(2, '0')}</div>
-        `;
+        // Rewards showcase
+        const rs = document.getElementById('rewards-showcase');
+        const b = this.sessionEarnings.breakdown;
+        rs.innerHTML = '';
+        const rewards = [
+            { icon:'🪙', value:'+' + this.sessionEarnings.coins, label:'Монет' },
+            { icon:'⚡', value:'+' + this.sessionEarnings.xp, label:'XP' },
+        ];
+        if (this.comboMax >= 3) rewards.push({ icon:'🔥', value:'x' + this.comboMax, label:'Комбо' });
+        rewards.forEach((r, i) => {
+            const el = document.createElement('div');
+            el.className = 'reward-item';
+            el.style.animationDelay = (i * 0.15 + 0.8) + 's';
+            el.innerHTML = `<span class="reward-icon-big">${r.icon}</span><span class="reward-value">${r.value}</span><span class="reward-label">${r.label}</span>`;
+            rs.appendChild(el);
+        });
+
+        // XP bar
+        document.getElementById('result-level').textContent = this.progress.level;
+        const need = xpForLevel(this.progress.level);
+        document.getElementById('result-xp-fill').style.width = '0%';
+        document.getElementById('result-xp-text').textContent = `${this.progress.xp}/${need}`;
+        setTimeout(() => {
+            document.getElementById('result-xp-fill').style.width = Math.min(100, (this.progress.xp / need) * 100) + '%';
+        }, 600);
 
         this.showScreen('screen-result');
+
+        // Спавним монеты!
+        setTimeout(() => this.spawnCoins(Math.min(15, Math.floor(this.sessionEarnings.coins / 20)), 50, 50), 1000);
     }
 
-    // === Утилиты ===
-
-    getRandomMessage(category) {
-        const messages = MESSAGES[category];
-        return messages[Math.floor(Math.random() * messages.length)];
+    showLevelUp() {
+        document.getElementById('levelup-num').textContent = this.progress.level;
+        const unlock = LEVEL_UNLOCKS[this.progress.level] || 'Больше опыта, больше возможностей!';
+        document.getElementById('levelup-unlock').textContent = unlock;
+        document.getElementById('popup-levelup').classList.add('active');
+        this.spawnCoins(20, 50, 50);
+    }
+    closeLevelUp() {
+        document.getElementById('popup-levelup').classList.remove('active');
     }
 
-    showMessage(text) {
-        const container = document.getElementById('message-container');
-        const msg = document.getElementById('game-message');
-        msg.textContent = text;
-        container.classList.add('show');
-        setTimeout(() => container.classList.remove('show'), 2500);
-    }
-
-    animateButton(btnId) {
-        const btn = document.getElementById(btnId);
-        btn.classList.add('pressed');
-        setTimeout(() => btn.classList.remove('pressed'), 200);
-    }
-
-    // === Сохранение прогресса ===
-
-    loadProgress() {
-        const saved = localStorage.getItem('tajine_progress');
-        if (saved) {
-            this.progress = JSON.parse(saved);
-        } else {
-            this.progress = {
-                totalStars: 0,
-                totalDishes: 0,
-                bestScores: {},
-                achievements: []
-            };
-        }
-    }
-
-    saveProgress() {
-        localStorage.setItem('tajine_progress', JSON.stringify(this.progress));
-    }
-
-    saveResult(stars) {
-        this.progress.totalDishes++;
-        this.progress.totalStars += stars;
-
-        const recipeId = this.currentRecipe.id;
-        if (!this.progress.bestScores[recipeId] || stars > this.progress.bestScores[recipeId]) {
-            this.progress.bestScores[recipeId] = stars;
-        }
-
-        // Проверяем достижения
-        this.checkAchievements(stars);
-        this.saveProgress();
-    }
-
-    checkAchievements(stars) {
-        if (this.progress.totalDishes === 1 && !this.progress.achievements.includes('first_cook')) {
-            this.progress.achievements.push('first_cook');
-        }
-        if (stars === 5 && !this.progress.achievements.includes('five_stars')) {
-            this.progress.achievements.push('five_stars');
-        }
-        if (this.spiceUses >= 20 && !this.progress.achievements.includes('spice_king')) {
-            this.progress.achievements.push('spice_king');
-        }
-        if (this.perfectFireTime >= 30 && !this.progress.achievements.includes('fire_master')) {
-            this.progress.achievements.push('fire_master');
-        }
-        if (this.progress.totalDishes >= 10 && !this.progress.achievements.includes('ten_dishes')) {
-            this.progress.achievements.push('ten_dishes');
-        }
-
-        const allUnlocked = RECIPES.every(r =>
-            r.unlocked || this.progress.totalStars >= (r.starsToUnlock || 0)
-        );
-        if (allUnlocked && !this.progress.achievements.includes('all_recipes')) {
-            this.progress.achievements.push('all_recipes');
-        }
-    }
-
-    // === Коллекция ===
-
+    // === Collection ===
     renderCollection() {
-        const container = document.getElementById('collection-container');
-        container.innerHTML = `
+        const c = document.getElementById('collection-container');
+        c.innerHTML = `
             <div class="collection-stats">
-                <div class="collection-stat">
-                    <span class="stat-number">${this.progress.totalDishes}</span>
-                    <span class="stat-label">Блюд приготовлено</span>
-                </div>
-                <div class="collection-stat">
-                    <span class="stat-number">${this.progress.totalStars}</span>
-                    <span class="stat-label">Звёзд собрано</span>
-                </div>
-            </div>
-            <h3 class="section-title">Достижения</h3>
-            <div class="achievements-grid">
-                ${ACHIEVEMENTS.map(a => `
-                    <div class="achievement ${this.progress.achievements.includes(a.id) ? 'unlocked' : 'locked'}">
-                        <span class="achievement-icon">${a.icon}</span>
-                        <span class="achievement-name">${a.name}</span>
-                        <span class="achievement-desc">${a.desc}</span>
-                    </div>
-                `).join('')}
-            </div>
-        `;
+                <div class="collection-stat"><span class="stat-number">${this.progress.totalDishes}</span><span class="stat-label">Блюд</span></div>
+                <div class="collection-stat"><span class="stat-number">${this.progress.totalStars}</span><span class="stat-label">⭐ Звёзд</span></div>
+                <div class="collection-stat"><span class="stat-number">${this.progress.level}</span><span class="stat-label">Уровень</span></div>
+                <div class="collection-stat"><span class="stat-number">${this.progress.coins}</span><span class="stat-label">🪙 Монет</span></div>
+            </div>`;
+    }
+
+    // === Particles / Juice ===
+    spawnCoins(n, xPct, yPct) {
+        const layer = document.getElementById('particles-layer');
+        const rect = layer.getBoundingClientRect();
+        const cx = rect.width * xPct / 100;
+        const cy = rect.height * yPct / 100;
+        for (let i = 0; i < n; i++) {
+            const c = document.createElement('div');
+            c.className = 'coin-particle';
+            c.textContent = '🪙';
+            c.style.left = cx + 'px';
+            c.style.top = cy + 'px';
+            const angle = (Math.PI * 2 * i / n) + Math.random() * 0.5;
+            const dist = 60 + Math.random() * 80;
+            c.style.setProperty('--dx', (Math.cos(angle) * 20) + 'px');
+            c.style.setProperty('--tx', (Math.cos(angle) * dist) + 'px');
+            c.style.setProperty('--ty', (Math.sin(angle) * dist - 60) + 'px');
+            c.style.animationDelay = (i * 0.05) + 's';
+            layer.appendChild(c);
+            setTimeout(() => c.remove(), 1500);
+        }
+    }
+    spawnFloatText(text, xPct, yPct) {
+        const layer = document.getElementById('particles-layer');
+        const rect = layer.getBoundingClientRect();
+        const el = document.createElement('div');
+        el.className = 'float-text';
+        el.textContent = text;
+        el.style.left = (rect.width * xPct / 100) + 'px';
+        el.style.top = (rect.height * yPct / 100) + 'px';
+        el.style.transform = 'translateX(-50%)';
+        layer.appendChild(el);
+        setTimeout(() => el.remove(), 1500);
+    }
+    shakeScreen() {
+        const f = document.querySelector('.phone-frame');
+        f.classList.remove('shake');
+        void f.offsetWidth;
+        f.classList.add('shake');
+    }
+    bump(id) {
+        const b = document.getElementById(id);
+        b.classList.add('pressed');
+        setTimeout(() => b.classList.remove('pressed'), 200);
+    }
+    showMessage(text) {
+        const c = document.getElementById('message-container');
+        document.getElementById('game-message').textContent = text;
+        c.classList.add('show');
+        clearTimeout(this._msgTimer);
+        this._msgTimer = setTimeout(() => c.classList.remove('show'), 2000);
     }
 }
 
-// Запускаем игру
 const game = new TajineGame();

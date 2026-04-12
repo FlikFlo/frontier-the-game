@@ -10,6 +10,8 @@
 </head>
 <body>
 <div class="phone-frame">
+    <div class="particles-layer" id="particles-layer"></div>
+
     <!-- Экран меню -->
     <div id="screen-menu" class="screen active">
         <div class="menu-container">
@@ -20,7 +22,11 @@
                 <div class="tajine-lid-logo"></div>
                 <div class="tajine-base-logo"></div>
             </div>
-            <button class="btn btn-primary" onclick="game.showRecipeSelect()">Начать готовку</button>
+            <div class="menu-stats">
+                <div class="menu-stat"><span>🪙</span><span id="menu-coins">0</span></div>
+                <div class="menu-stat"><span>👨‍🍳</span>Ур.<span id="menu-level">1</span></div>
+            </div>
+            <button class="btn btn-primary btn-glow" onclick="game.showRecipeSelect()">Принять заказ</button>
             <button class="btn btn-secondary" onclick="game.showCollection()">Коллекция</button>
         </div>
     </div>
@@ -40,7 +46,21 @@
     <div id="screen-game" class="screen">
         <div class="game-header">
             <div class="recipe-name" id="current-recipe-name">Курица с оливками</div>
-            <div class="timer" id="game-timer">0:00</div>
+            <div class="combo-display" id="combo-display">
+                <span class="combo-text" id="combo-text">КОМБО</span>
+                <span class="combo-mult" id="combo-mult">x1</span>
+            </div>
+            <div class="order-timer" id="order-timer">
+                <div class="order-timer-fill" id="order-timer-fill"></div>
+                <span id="order-timer-text">60</span>
+            </div>
+        </div>
+
+        <!-- Случайное событие -->
+        <div class="event-popup" id="event-popup">
+            <div class="event-icon" id="event-icon">🐱</div>
+            <div class="event-text" id="event-text">Кот тянется к рыбе!</div>
+            <button class="btn-event" id="event-btn" onclick="game.handleEvent()">ТАП!</button>
         </div>
 
         <!-- Визуализация тажина -->
@@ -135,10 +155,31 @@
                 <div class="tajine-base-logo result-dish"></div>
             </div>
             <div class="stars-container" id="stars-container"></div>
-            <div class="result-stats" id="result-stats"></div>
             <div class="result-comment" id="result-comment"></div>
-            <button class="btn btn-primary" onclick="game.showRecipeSelect()">Готовить ещё</button>
+            <div class="rewards-showcase" id="rewards-showcase"></div>
+            <div class="xp-bar-container">
+                <div class="xp-bar-label">Ур. <span id="result-level">1</span></div>
+                <div class="xp-bar-track">
+                    <div class="xp-bar-fill" id="result-xp-fill"></div>
+                </div>
+                <div class="xp-bar-text" id="result-xp-text">0/100</div>
+            </div>
+            <button class="btn btn-primary btn-glow" onclick="game.showRecipeSelect()">Следующий заказ</button>
             <button class="btn btn-secondary" onclick="game.showMenu()">В меню</button>
+        </div>
+    </div>
+
+    <!-- Попап Level Up -->
+    <div id="popup-levelup" class="popup-overlay">
+        <div class="popup-card levelup-card">
+            <div class="levelup-badge">🎉</div>
+            <h2>Уровень <span id="levelup-num">2</span>!</h2>
+            <div class="levelup-unlock" id="levelup-unlock"></div>
+            <button class="btn btn-primary" onclick="game.closeLevelUp()">Отлично!</button>
+        </div>
+    </div>
+
+    <div style="display:none">
         </div>
     </div>
 
