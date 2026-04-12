@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Тажин Тамагочи</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="phone-frame">
+    <div class="particles-layer" id="particles-layer"></div>
+
+    <!-- Экран меню -->
+    <div id="screen-menu" class="screen active">
+        <div class="menu-container">
+            <div class="menu-pattern"></div>
+            <h1 class="game-title">تاجين</h1>
+            <h2 class="game-subtitle">Тажин Тамагочи</h2>
+            <div class="tajine-logo">
+                <div class="tajine-lid-logo"></div>
+                <div class="tajine-base-logo"></div>
+            </div>
+            <div class="menu-stats">
+                <div class="menu-stat"><span>🪙</span><span id="menu-coins">0</span></div>
+                <div class="menu-stat"><span>👨‍🍳</span>Ур.<span id="menu-level">1</span></div>
+            </div>
+            <button class="btn btn-primary btn-glow" onclick="game.showRecipeSelect()">Принять заказ</button>
+            <button class="btn btn-secondary" onclick="game.showCollection()">Коллекция</button>
+        </div>
+    </div>
+
+    <!-- Экран выбора рецепта -->
+    <div id="screen-recipes" class="screen">
+        <div class="screen-header">
+            <button class="btn-back" onclick="game.showMenu()">&#8592;</button>
+            <h2>Выбери рецепт</h2>
+        </div>
+        <div class="recipes-list" id="recipes-list">
+            <!-- Рецепты заполняются через JS -->
+        </div>
+    </div>
+
+    <!-- Основной экран игры -->
+    <div id="screen-game" class="screen">
+        <div class="game-header">
+            <div class="recipe-name" id="current-recipe-name">Курица с оливками</div>
+            <div class="combo-display" id="combo-display">
+                <span class="combo-text" id="combo-text">КОМБО</span>
+                <span class="combo-mult" id="combo-mult">x1</span>
+            </div>
+            <div class="order-timer" id="order-timer">
+                <div class="order-timer-fill" id="order-timer-fill"></div>
+                <span id="order-timer-text">60</span>
+            </div>
+        </div>
+
+        <!-- Случайное событие -->
+        <div class="event-popup" id="event-popup">
+            <div class="event-icon" id="event-icon">🐱</div>
+            <div class="event-text" id="event-text">Кот тянется к рыбе!</div>
+            <button class="btn-event" id="event-btn" onclick="game.handleEvent()">ТАП!</button>
+        </div>
+
+        <!-- Визуализация тажина -->
+        <div class="tajine-container">
+            <div class="steam-container" id="steam-container">
+                <div class="steam steam-1"></div>
+                <div class="steam steam-2"></div>
+                <div class="steam steam-3"></div>
+            </div>
+            <div class="tajine">
+                <div class="tajine-lid" id="tajine-lid">
+                    <div class="tajine-knob"></div>
+                </div>
+                <div class="tajine-base" id="tajine-base">
+                    <div class="tajine-food" id="tajine-food"></div>
+                </div>
+            </div>
+            <div class="fire-container" id="fire-container">
+                <div class="fire-particle fire-1"></div>
+                <div class="fire-particle fire-2"></div>
+                <div class="fire-particle fire-3"></div>
+                <div class="coal"></div>
+            </div>
+        </div>
+
+        <!-- Шкалы параметров -->
+        <div class="stats-container">
+            <div class="stat-bar">
+                <span class="stat-icon">🔥</span>
+                <div class="stat-track">
+                    <div class="stat-zone" style="left:40%;width:30%"></div>
+                    <div class="stat-fill stat-heat" id="bar-heat"></div>
+                </div>
+                <span class="stat-value" id="val-heat">50</span>
+            </div>
+            <div class="stat-bar">
+                <span class="stat-icon">💧</span>
+                <div class="stat-track">
+                    <div class="stat-zone" style="left:30%;width:30%"></div>
+                    <div class="stat-fill stat-moisture" id="bar-moisture"></div>
+                </div>
+                <span class="stat-value" id="val-moisture">50</span>
+            </div>
+            <div class="stat-bar">
+                <span class="stat-icon">🌶️</span>
+                <div class="stat-track">
+                    <div class="stat-zone" style="left:50%;width:30%"></div>
+                    <div class="stat-fill stat-flavor" id="bar-flavor"></div>
+                </div>
+                <span class="stat-value" id="val-flavor">0</span>
+            </div>
+            <div class="stat-bar">
+                <span class="stat-icon">✅</span>
+                <div class="stat-track">
+                    <div class="stat-fill stat-doneness" id="bar-doneness"></div>
+                </div>
+                <span class="stat-value" id="val-doneness">0%</span>
+            </div>
+        </div>
+
+        <!-- Кнопки действий -->
+        <div class="actions-container">
+            <button class="action-btn" id="btn-fire" onclick="game.addFire()">
+                <span class="action-icon">🔥</span>
+                <span class="action-label">Огонь</span>
+            </button>
+            <button class="action-btn" id="btn-water" onclick="game.addWater()">
+                <span class="action-icon">💧</span>
+                <span class="action-label">Вода</span>
+            </button>
+            <button class="action-btn" id="btn-spice" onclick="game.addSpice()">
+                <span class="action-icon">🌶️</span>
+                <span class="action-label">Специи</span>
+            </button>
+            <button class="action-btn" id="btn-stir" onclick="game.stir()">
+                <span class="action-icon">🥄</span>
+                <span class="action-label">Мешать</span>
+            </button>
+        </div>
+
+        <!-- Сообщение-подсказка -->
+        <div class="message-container" id="message-container">
+            <p id="game-message"></p>
+        </div>
+    </div>
+
+    <!-- Экран результата -->
+    <div id="screen-result" class="screen">
+        <div class="result-container">
+            <h2 id="result-title">Блюдо готово!</h2>
+            <div class="result-tajine">
+                <div class="tajine-base-logo result-dish"></div>
+            </div>
+            <div class="stars-container" id="stars-container"></div>
+            <div class="result-comment" id="result-comment"></div>
+            <div class="rewards-showcase" id="rewards-showcase"></div>
+            <div class="xp-bar-container">
+                <div class="xp-bar-label">Ур. <span id="result-level">1</span></div>
+                <div class="xp-bar-track">
+                    <div class="xp-bar-fill" id="result-xp-fill"></div>
+                </div>
+                <div class="xp-bar-text" id="result-xp-text">0/100</div>
+            </div>
+            <button class="btn btn-primary btn-glow" onclick="game.showRecipeSelect()">Следующий заказ</button>
+            <button class="btn btn-secondary" onclick="game.showMenu()">В меню</button>
+        </div>
+    </div>
+
+    <!-- Попап Level Up -->
+    <div id="popup-levelup" class="popup-overlay">
+        <div class="popup-card levelup-card">
+            <div class="levelup-badge">🎉</div>
+            <h2>Уровень <span id="levelup-num">2</span>!</h2>
+            <div class="levelup-unlock" id="levelup-unlock"></div>
+            <button class="btn btn-primary" onclick="game.closeLevelUp()">Отлично!</button>
+        </div>
+    </div>
+
+    <div style="display:none">
+        </div>
+    </div>
+
+    <!-- Экран коллекции -->
+    <div id="screen-collection" class="screen">
+        <div class="screen-header">
+            <button class="btn-back" onclick="game.showMenu()">&#8592;</button>
+            <h2>Моя коллекция</h2>
+        </div>
+        <div class="collection-container" id="collection-container">
+            <!-- Заполняется через JS -->
+        </div>
+    </div>
+
+</div><!-- /phone-frame -->
+    <script src="game.js"></script>
+</body>
+</html>
