@@ -1,6 +1,7 @@
 import type { EnemyTemplate } from '../types/domain';
 
 export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
+  // ----- Mine of Virdite -----
   mine_rat: {
     id: 'mine_rat',
     name: 'Шахтная крыса',
@@ -11,6 +12,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     damageType: 'physical',
     xpReward: 5,
     lootTableId: 'mine_basic',
+    preferredRow: 'front',
+    attackRange: 'melee',
   },
   stone_beetle: {
     id: 'stone_beetle',
@@ -22,6 +25,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     damageType: 'physical',
     xpReward: 9,
     lootTableId: 'mine_basic',
+    preferredRow: 'front',
+    attackRange: 'melee',
   },
   rogue_miner: {
     id: 'rogue_miner',
@@ -33,6 +38,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     damageType: 'physical',
     xpReward: 8,
     lootTableId: 'mine_basic',
+    preferredRow: 'front',
+    attackRange: 'melee',
   },
   ore_elemental: {
     id: 'ore_elemental',
@@ -45,6 +52,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     school: 'earth',
     xpReward: 12,
     lootTableId: 'mine_crystal',
+    preferredRow: 'back',
+    attackRange: 'ranged',
   },
   ancient_golem: {
     id: 'ancient_golem',
@@ -56,6 +65,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     damageType: 'physical',
     xpReward: 60,
     lootTableId: 'boss_mine',
+    preferredRow: 'front',
+    attackRange: 'melee',
   },
 
   // ----- Emerald Reach (Portal World 1) -----
@@ -70,6 +81,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     school: 'earth',
     xpReward: 16,
     lootTableId: 'emerald_basic',
+    preferredRow: 'front',
+    attackRange: 'melee',
   },
   crystal_spider: {
     id: 'crystal_spider',
@@ -82,6 +95,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     school: 'earth',
     xpReward: 14,
     lootTableId: 'emerald_basic',
+    preferredRow: 'back',
+    attackRange: 'ranged',
   },
   wandering_slab: {
     id: 'wandering_slab',
@@ -94,6 +109,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     school: 'earth',
     xpReward: 18,
     lootTableId: 'emerald_basic',
+    preferredRow: 'front',
+    attackRange: 'melee',
   },
   maze_heart: {
     id: 'maze_heart',
@@ -106,6 +123,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     school: 'earth',
     xpReward: 140,
     lootTableId: 'emerald_boss',
+    preferredRow: 'back',
+    attackRange: 'ranged',
   },
 };
 

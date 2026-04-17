@@ -233,6 +233,9 @@ export type EnemyTemplate = {
   school?: MagicSchool;
   xpReward: number;
   lootTableId?: string;
+  // Formation — which row the enemy spawns in and whether it can hit across the line.
+  preferredRow: 'front' | 'back';
+  attackRange: 'melee' | 'ranged';
 };
 
 // ---------- Persistent game state ----------

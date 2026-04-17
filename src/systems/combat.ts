@@ -2,10 +2,12 @@
 // The UI drives simulation by calling stepCombat() with delays for animation.
 
 import type {
+  AttackRange,
   Combatant,
   CombatLogEntry,
   CombatSetup,
   CombatState,
+  FormationRow,
   StatusEffect,
   ZirRuntime,
 } from '../types/combat';
@@ -46,10 +48,40 @@ function makeZirRuntime(item: Item): ZirRuntime | null {
   };
 }
 
+// Place units into a 2x2 grid per side, honoring preferredRow.
+// Fills front row first across columns, then back row.
+function assignFormation<T extends { row: FormationRow; col: number }>(
+  units: { unit: T; preferredRow: FormationRow }[],
+): void {
+  const taken: Record<FormationRow, Set<number>> = { front: new Set(), back: new Set() };
+  // Prefer declared row, cascade to the other if full.
+  for (const { unit, preferredRow } of units) {
+    const tryRows: FormationRow[] = preferredRow === 'front' ? ['front', 'back'] : ['back', 'front'];
+    let placed = false;
+    for (const row of tryRows) {
+      for (let col = 0; col < 2; col++) {
+        if (!taken[row].has(col)) {
+          unit.row = row;
+          unit.col = col;
+          taken[row].add(col);
+          placed = true;
+          break;
+        }
+      }
+      if (placed) break;
+    }
+    if (!placed) {
+      // Overflow: stack on back row col 0.
+      unit.row = 'back';
+      unit.col = 0;
+    }
+  }
+}
+
 export function buildCombat(setup: CombatSetup): CombatState {
   const combatants: Combatant[] = [];
 
-  // Hero
+  // Hero: front row by default (MVP has sword = melee)
   const heroZirs: ZirRuntime[] = [];
   for (const zirId of setup.hero.equippedZirIds) {
     const inv = setup.heroInventory.find((i) => i.item.id === zirId);
@@ -62,6 +94,8 @@ export function buildCombat(setup: CombatSetup): CombatState {
   const weaponDamage = weaponInst && weaponInst.item.kind === 'weapon' ? weaponInst.item.damage : 4;
   const weaponType: DamageType =
     weaponInst && weaponInst.item.kind === 'weapon' ? weaponInst.item.damageType : 'physical';
+  // For MVP: melee weapons = melee, magic weapons = ranged.
+  const heroRange: AttackRange = weaponType === 'magic' ? 'ranged' : 'melee';
 
   combatants.push({
     id: 'hero',
@@ -79,11 +113,17 @@ export function buildCombat(setup: CombatSetup): CombatState {
     timelinePosition: 0,
     zirs: heroZirs,
     behavior: 'hero',
+    row: 'front',
+    col: 0,
+    attackRange: heroRange,
   });
 
-  // Companion
+  // Companion: role → row/range mapping
   if (setup.companion) {
     const c = setup.companion;
+    const compRow: FormationRow =
+      c.role === 'support' || c.role === 'control' ? 'back' : 'front';
+    const compRange: AttackRange = c.role === 'control' ? 'ranged' : 'melee';
     combatants.push({
       id: 'companion',
       kind: 'companion',
@@ -97,11 +137,21 @@ export function buildCombat(setup: CombatSetup): CombatState {
       weaponDamage: c.weaponDamage,
       damageType: 'physical',
       statuses: [],
-      timelinePosition: 5, // slight delay so hero usually acts first
+      timelinePosition: 5,
       zirs: [],
       behavior: 'companion',
+      row: compRow,
+      col: 0,
+      attackRange: compRange,
     });
   }
+
+  // Lay out ally formation (hero + companion) respecting preferredRow.
+  assignFormation(
+    combatants
+      .filter((c) => c.side === 'ally')
+      .map((c) => ({ unit: c, preferredRow: c.row })),
+  );
 
   // Enemies
   setup.enemies.forEach((e, i) => {
@@ -124,8 +174,17 @@ export function buildCombat(setup: CombatSetup): CombatState {
       behavior: e.behavior,
       sourceTemplateId: e.id,
       xpReward: e.xpReward,
+      row: e.preferredRow,
+      col: 0,
+      attackRange: e.attackRange,
     });
   });
+
+  assignFormation(
+    combatants
+      .filter((c) => c.side === 'enemy')
+      .map((c) => ({ unit: c, preferredRow: c.row })),
+  );
 
   return {
     turn: 0,
@@ -165,15 +224,34 @@ type Action =
   | { kind: 'zir'; actorId: string; zirId: string; targetId: string }
   | { kind: 'skip'; actorId: string; reason: string };
 
-function pickTarget(state: CombatState, actor: Combatant): Combatant | null {
-  const targets = enemiesOf(state, actor.side);
-  if (targets.length === 0) return null;
+// Formation rule: melee attackers must target the enemy front row if anyone
+// on it is still alive. Ranged attackers can target either row freely.
+function eligibleTargets(
+  state: CombatState,
+  actor: Combatant,
+  rangeOverride?: AttackRange,
+): Combatant[] {
+  const all = enemiesOf(state, actor.side);
+  if (all.length === 0) return [];
+  const range = rangeOverride ?? actor.attackRange;
+  if (range === 'ranged') return all;
+  const front = all.filter((c) => c.row === 'front');
+  return front.length > 0 ? front : all;
+}
+
+function pickTarget(
+  state: CombatState,
+  actor: Combatant,
+  rangeOverride?: AttackRange,
+): Combatant | null {
+  const pool = eligibleTargets(state, actor, rangeOverride);
+  if (pool.length === 0) return null;
   // focus_boss: prefer highest-HP-max target
   if (state.tactic === 'focus_boss') {
-    return targets.reduce((a, b) => (b.hpMax > a.hpMax ? b : a));
+    return pool.reduce((a, b) => (b.hpMax > a.hpMax ? b : a));
   }
   // aggressive + default: pick lowest HP (finisher)
-  return targets.reduce((a, b) => (b.hp < a.hp ? b : a));
+  return pool.reduce((a, b) => (b.hp < a.hp ? b : a));
 }
 
 function chooseAction(state: CombatState, actor: Combatant, rng: RNG): Action {
@@ -194,7 +272,7 @@ function chooseAction(state: CombatState, actor: Combatant, rng: RNG): Action {
       }
     }
   }
-  // Offensive Zir if ready
+  // Offensive Zir if ready — treat as ranged, bypassing the melee-must-front rule.
   const offZir = actor.zirs.find(
     (z) =>
       z.cooldownLeft === 0 &&
@@ -202,7 +280,7 @@ function chooseAction(state: CombatState, actor: Combatant, rng: RNG): Action {
       (z.zir.effect.type === 'damage' || z.zir.effect.type === 'dot'),
   );
   if (offZir) {
-    const tgt = pickTarget(state, actor);
+    const tgt = pickTarget(state, actor, 'ranged');
     if (tgt) {
       return { kind: 'zir', actorId: actor.id, zirId: offZir.instanceId, targetId: tgt.id };
     }

@@ -25,6 +25,10 @@ export type StatusEffect =
 
 export type CombatantKind = 'hero' | 'companion' | 'enemy';
 
+// Formation position. Front row shields back row from melee attacks.
+export type FormationRow = 'front' | 'back';
+export type AttackRange = 'melee' | 'ranged';
+
 export type ZirRuntime = {
   instanceId: string;
   zir: Zir;
@@ -55,6 +59,10 @@ export type Combatant = {
   // Link to source data for loot on death (enemies only)
   sourceTemplateId?: string;
   xpReward?: number;
+  // Formation
+  row: FormationRow;
+  col: number; // 0 or 1 for MVP 2x2 grid
+  attackRange: AttackRange;
 };
 
 export type CombatTactic = 'aggressive' | 'cautious' | 'balanced' | 'focus_boss' | 'defensive';
