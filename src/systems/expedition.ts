@@ -7,9 +7,6 @@ import type {
 } from '../types/domain';
 import { createRng, type RNG } from './rng';
 
-// MVP-1.5: linear path driven by the template's nodeLayout.
-// Branching graphs land in MVP-2.
-
 const DEFAULT_LABEL: Record<NodeType, string> = {
   start: 'Вход',
   combat: 'Стычка',
@@ -28,24 +25,29 @@ function pickCombatGroup(rng: RNG, pool: readonly string[], elite: boolean): str
   return out;
 }
 
+// Builds the runtime ExpeditionRun from a template's layout graph.
+// Preserves node IDs from the layout so edges stay valid.
 export function generateExpedition(
   template: ExpeditionTemplate,
   seed: number,
 ): ExpeditionRun {
   const rng = createRng(seed);
   const nodes: ExpeditionNode[] = [];
-  const edges: ExpeditionEdge[] = [];
+  const edges: ExpeditionEdge[] = template.layout.edges.map((e) => ({ ...e }));
 
-  template.nodeLayout.forEach((type, i) => {
-    const id = `n${i}`;
-    const label =
-      template.nodeLabels?.[i] ?? DEFAULT_LABEL[type] ?? 'Узел';
-    const node: ExpeditionNode = { id, type, label };
+  template.layout.nodes.forEach((layoutNode, i) => {
+    const type = layoutNode.type;
+    const label = layoutNode.label ?? DEFAULT_LABEL[type] ?? 'Узел';
+    const node: ExpeditionNode = { id: layoutNode.id, type, label };
 
     if (type === 'combat') {
-      node.combat = { enemyTemplateIds: pickCombatGroup(rng.fork(i * 7 + 1), template.combatPool, false) };
+      node.combat = {
+        enemyTemplateIds: pickCombatGroup(rng.fork(i * 7 + 1), template.combatPool, false),
+      };
     } else if (type === 'elite') {
-      node.combat = { enemyTemplateIds: pickCombatGroup(rng.fork(i * 11 + 3), template.combatPool, true) };
+      node.combat = {
+        enemyTemplateIds: pickCombatGroup(rng.fork(i * 11 + 3), template.combatPool, true),
+      };
     } else if (type === 'boss') {
       node.combat = { enemyTemplateIds: [template.bossTemplateId] };
     } else if (type === 'treasure') {
@@ -58,7 +60,6 @@ export function generateExpedition(
     }
 
     nodes.push(node);
-    if (i > 0) edges.push({ from: `n${i - 1}`, to: id });
   });
 
   return {
@@ -66,8 +67,8 @@ export function generateExpedition(
     seed,
     nodes,
     edges,
-    currentNodeId: nodes[0]!.id,
-    visitedNodeIds: [nodes[0]!.id],
+    currentNodeId: template.layout.startNodeId,
+    visitedNodeIds: [template.layout.startNodeId],
     raidLoot: [],
     portalInstability: 0,
     startedAt: 0,
@@ -97,4 +98,30 @@ export function advanceTo(run: ExpeditionRun, nodeId: string): ExpeditionRun {
 export function isExtractionNode(run: ExpeditionRun): boolean {
   const node = run.nodes.find((n) => n.id === run.currentNodeId);
   return node?.type === 'extraction';
+}
+
+// Orders nodes in topological/reachable order from start. Useful for UI rendering
+// so branching paths read in a sensible sequence instead of template definition order.
+export function orderedNodeIds(run: ExpeditionRun): string[] {
+  const outgoing = new Map<string, string[]>();
+  for (const e of run.edges) {
+    const arr = outgoing.get(e.from) ?? [];
+    arr.push(e.to);
+    outgoing.set(e.from, arr);
+  }
+  const startId = run.nodes[0]?.id;
+  if (!startId) return [];
+  const order: string[] = [];
+  const seen = new Set<string>();
+  // Depth-first from start; deterministic ordering matches edge definition.
+  const walk = (id: string) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    order.push(id);
+    for (const next of outgoing.get(id) ?? []) walk(next);
+  };
+  walk(startId);
+  // Append any orphans (shouldn't happen but defensive).
+  for (const n of run.nodes) if (!seen.has(n.id)) order.push(n.id);
+  return order;
 }

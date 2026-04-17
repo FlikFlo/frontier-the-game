@@ -6,6 +6,7 @@ import { Bar } from '../components/Bar';
 import { colors, radii, spacing, typography } from '../theme/colors';
 import { useGame } from '../state/store';
 import { nextNodeOptions } from '../systems/expedition';
+import { getExpeditionTemplate } from '../data/expeditions';
 import type { ExpeditionNode, NodeType } from '../types/domain';
 import type { ScreenProps } from '../navigation/types';
 
@@ -81,9 +82,11 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
     );
   }
 
+  const template = getExpeditionTemplate(run.templateId);
   const available = new Set(nextNodeOptions(run).map((n) => n.id));
   const visited = new Set(run.visitedNodeIds);
   const instabilityMax = run.nodes.length; // 1 per visited
+  const hasBranching = available.size > 1;
 
   const goTo = (node: ExpeditionNode) => {
     advanceToNode(node.id);
@@ -102,7 +105,7 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
   return (
     <Screen>
       <View style={{ marginBottom: spacing.md }}>
-        <Text style={typography.h2}>Шахта Вирдита</Text>
+        <Text style={typography.h2}>{template.name}</Text>
         <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
           Собрано: {run.raidLoot.length} предм. · Посещено узлов: {run.visitedNodeIds.length}
         </Text>
@@ -113,6 +116,11 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
           color={colors.warn}
           label="Нестабильность портала"
         />
+        {hasBranching ? (
+          <Text style={[typography.caption, { color: colors.accent, marginTop: spacing.xs }]}>
+            Развилка: выбери путь.
+          </Text>
+        ) : null}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>

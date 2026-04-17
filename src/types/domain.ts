@@ -167,6 +167,23 @@ export type ExpeditionNode = {
 
 export type ExpeditionEdge = { from: string; to: string };
 
+export type LayoutNode = {
+  id: string;
+  type: NodeType;
+  label?: string;
+};
+
+export type LayoutEdge = {
+  from: string;
+  to: string;
+};
+
+export type ExpeditionLayout = {
+  nodes: LayoutNode[];
+  edges: LayoutEdge[];
+  startNodeId: string;
+};
+
 export type ExpeditionTemplate = {
   id: string;
   name: string;
@@ -175,10 +192,9 @@ export type ExpeditionTemplate = {
   crystalCost: Partial<Record<CrystalKind, number>>;
   recommendedPower: number;
   description?: string;
-  // Node layout: ordered types. A linear path of this length is generated.
-  nodeLayout: NodeType[];
-  // Optional labels per node (for narrative flavor). If missing, a default is chosen.
-  nodeLabels?: (string | null)[];
+  // Explicit graph of the expedition. Supports branching and multiple
+  // extraction points — the core of the extraction loop.
+  layout: ExpeditionLayout;
   // Enemy template IDs for combat nodes; boss is separate.
   combatPool: string[];
   bossTemplateId: string;
