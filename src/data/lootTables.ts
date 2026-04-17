@@ -61,6 +61,42 @@ export const LOOT_TABLES: Record<string, LootTable> = {
       { templateId: 'ink_essence', weight: 1, min: 1, max: 1 },
     ],
   },
+
+  emerald_basic: {
+    id: 'emerald_basic',
+    rolls: 1,
+    entries: [
+      { templateId: 'living_stone', weight: 3, min: 1, max: 2 },
+      { templateId: 'crystal_fang', weight: 2, min: 1, max: 1 },
+      { templateId: 'crystal_virdite', weight: 2, min: 1, max: 1 },
+      { templateId: 'mine_herb', weight: 2, min: 1, max: 2 },
+      { templateId: 'ink_essence', weight: 1, min: 1, max: 1 },
+    ],
+  },
+  emerald_boss: {
+    id: 'emerald_boss',
+    guaranteed: [
+      { templateId: 'maze_shard', weight: 1, min: 1, max: 1 },
+      { templateId: 'living_stone', weight: 1, min: 3, max: 5 },
+      { templateId: 'virdite_greater', weight: 1, min: 1, max: 2 },
+    ],
+    rolls: 1,
+    entries: [
+      { templateId: 'crystal_fang', weight: 2, min: 2, max: 3 },
+      { templateId: 'golem_core', weight: 1, min: 1, max: 1 },
+    ],
+  },
+  emerald_chest: {
+    id: 'emerald_chest',
+    rolls: 2,
+    entries: [
+      { templateId: 'living_stone', weight: 3, min: 1, max: 2 },
+      { templateId: 'potion_health_greater', weight: 1, min: 1, max: 1 },
+      { templateId: 'zir_stone_spike', weight: 1, min: 1, max: 1 },
+      { templateId: 'crude_paper', weight: 2, min: 1, max: 2 },
+      { templateId: 'ink_essence', weight: 1, min: 1, max: 1 },
+    ],
+  },
 };
 
 export function getLootTable(id: string): LootTable {

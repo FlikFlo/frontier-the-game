@@ -1,12 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Button } from '../components/Button';
 import { Bar } from '../components/Bar';
 import { Screen } from '../components/Screen';
 import { colors, radii, spacing, typography } from '../theme/colors';
 import { useGame } from '../state/store';
 import { EXPEDITION_TEMPLATES } from '../data/expeditions';
+import type { CrystalKind } from '../types/domain';
 import type { ScreenProps } from '../navigation/types';
+
+const CRYSTAL_NAME: Record<CrystalKind, string> = {
+  virdite: 'Вирдит',
+  aquirin: 'Аквирин',
+  pyrite: 'Пирит',
+  zephyrite: 'Зефирит',
+  lucerite: 'Люцерит',
+  nocrite: 'Нокрит',
+  sanguit: 'Сангвит',
+};
 
 export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
   const hero = useGame((s) => s.hero);
@@ -16,12 +28,20 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
   const inventory = useGame((s) => s.inventory);
   const inventoryCapacity = useGame((s) => s.inventoryCapacity);
   const startExpedition = useGame((s) => s.startExpedition);
+  const checkExpeditionCost = useGame((s) => s.checkExpeditionCost);
   const lastResult = useGame((s) => s.lastResult);
+
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const inventoryFill = inventory.reduce((s, x) => s + x.item.size, 0);
 
   const begin = (templateId: string) => {
-    startExpedition(templateId);
+    const res = startExpedition(templateId);
+    if (!res.ok) {
+      setErrorMsg(res.message);
+      setTimeout(() => setErrorMsg(null), 2400);
+      return;
+    }
     navigation.navigate('ExpeditionMap');
   };
 
@@ -91,15 +111,70 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
         <View style={styles.card}>
           <Text style={typography.h3}>Вылазки</Text>
           <View style={{ height: spacing.md }} />
-          {Object.values(EXPEDITION_TEMPLATES).map((tpl) => (
-            <View key={tpl.id} style={{ marginBottom: spacing.sm }}>
-              <Text style={[typography.body, { color: colors.text, marginBottom: 2 }]}>{tpl.name}</Text>
-              <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.sm }]}>
-                Дней в пути: {tpl.travelDays} · Рекоменд. сила: {tpl.recommendedPower}
+          {Object.values(EXPEDITION_TEMPLATES).map((tpl) => {
+            const costEntries = Object.entries(tpl.crystalCost).filter(
+              ([, v]) => (v ?? 0) > 0,
+            ) as [CrystalKind, number][];
+            const check = checkExpeditionCost(tpl.id);
+            const affordable = check.ok;
+            return (
+              <View
+                key={tpl.id}
+                style={[
+                  styles.expedition,
+                  tpl.portal && { borderColor: colors.earth, backgroundColor: '#141c14' },
+                ]}
+              >
+                <View style={styles.rowBetween}>
+                  <Text style={[typography.body, { color: colors.text }]}>{tpl.name}</Text>
+                  {tpl.portal ? (
+                    <Text style={[typography.caption, { color: colors.earth }]}>⌬ Портал</Text>
+                  ) : null}
+                </View>
+                {tpl.description ? (
+                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                    {tpl.description}
+                  </Text>
+                ) : null}
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>
+                  Дней в пути: {tpl.travelDays} · Рекоменд. сила: {tpl.recommendedPower}
+                </Text>
+                {costEntries.length > 0 ? (
+                  <View style={{ marginTop: spacing.xs }}>
+                    {costEntries.map(([kind, need]) => {
+                      const have = crystals[kind] ?? 0;
+                      const enough = have >= need;
+                      return (
+                        <Text
+                          key={kind}
+                          style={[
+                            typography.caption,
+                            { color: enough ? colors.earth : colors.danger },
+                          ]}
+                        >
+                          ◆ {CRYSTAL_NAME[kind]}: {have}/{need}
+                          {tpl.portal ? ' — сгорают при открытии портала' : ''}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                ) : null}
+                <View style={{ height: spacing.sm }} />
+                <Button
+                  label={affordable ? 'Отправиться' : 'Не хватает кристаллов'}
+                  disabled={!affordable}
+                  onPress={() => begin(tpl.id)}
+                />
+              </View>
+            );
+          })}
+          {errorMsg ? (
+            <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(200)}>
+              <Text style={[typography.caption, { color: colors.danger, marginTop: spacing.sm }]}>
+                {errorMsg}
               </Text>
-              <Button label="Отправиться" onPress={() => begin(tpl.id)} />
-            </View>
-          ))}
+            </Animated.View>
+          ) : null}
         </View>
 
         {/* Inventory & Crafting */}
@@ -144,4 +219,12 @@ const styles = StyleSheet.create({
   },
   bannerOk: { backgroundColor: '#1d2d1d', borderColor: colors.success },
   bannerBad: { backgroundColor: '#2d1d1d', borderColor: colors.danger },
+  expedition: {
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
+  },
 });

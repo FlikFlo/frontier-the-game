@@ -66,4 +66,6 @@ function runCase(label: string, enemyIds: string[], seed: number) {
 
 runCase('basic pair', ['mine_rat', 'stone_beetle'], 1337);
 runCase('trio ambush', ['rogue_miner', 'rogue_miner', 'ore_elemental'], 42);
-runCase('boss fight', ['ancient_golem'], 7);
+runCase('mine boss', ['ancient_golem'], 7);
+runCase('emerald trio', ['stone_guard', 'crystal_spider', 'wandering_slab'], 99);
+runCase('maze heart', ['maze_heart'], 314);

@@ -174,6 +174,20 @@ export type ExpeditionTemplate = {
   travelDays: number;
   crystalCost: Partial<Record<CrystalKind, number>>;
   recommendedPower: number;
+  description?: string;
+  // Node layout: ordered types. A linear path of this length is generated.
+  nodeLayout: NodeType[];
+  // Optional labels per node (for narrative flavor). If missing, a default is chosen.
+  nodeLabels?: (string | null)[];
+  // Enemy template IDs for combat nodes; boss is separate.
+  combatPool: string[];
+  bossTemplateId: string;
+  // Loot tables by node type.
+  chestLootTableId: string;
+  // Event IDs to choose from for event nodes.
+  eventIds?: string[];
+  // If true, this expedition is a portal world (uses portal room and crystals).
+  portal: boolean;
 };
 
 export type ExpeditionRun = {

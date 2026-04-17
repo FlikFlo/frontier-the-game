@@ -179,6 +179,52 @@ export const ITEM_TEMPLATES: Record<string, Item> = {
     tags: ['stone', 'reagent'],
     description: 'Пульсирует тихим зелёным светом. Сердце древней каменной твари.',
   },
+
+  // ----- Emerald Reach drops -----
+  living_stone: {
+    id: 'tpl:living_stone',
+    templateId: 'living_stone',
+    name: 'Живой Камень',
+    kind: 'material',
+    rarity: 'rare',
+    size: 2,
+    tags: ['stone', 'reagent'],
+    description:
+      'Камень, растущий сам по себе. Ускоряет проявление новых комнат в крепости.',
+  },
+  crystal_fang: {
+    id: 'tpl:crystal_fang',
+    templateId: 'crystal_fang',
+    name: 'Кристальный клык',
+    kind: 'material',
+    rarity: 'uncommon',
+    size: 1,
+    tags: ['crystal', 'organic'],
+    description: 'Кусок кристалла, сорвавшийся с паука. Остро режет магию.',
+  },
+  maze_shard: {
+    id: 'tpl:maze_shard',
+    templateId: 'maze_shard',
+    name: 'Осколок Сердца Лабиринта',
+    kind: 'artifact',
+    rarity: 'legendary',
+    size: 1,
+    tags: ['crystal', 'stone'],
+    description:
+      'Кусок живого ядра портального мира. Источник неиссякаемой земляной магии.',
+  },
+  virdite_greater: {
+    id: 'tpl:virdite_greater',
+    templateId: 'virdite_greater',
+    name: 'Большой Вирдит',
+    kind: 'crystal',
+    rarity: 'rare',
+    size: 1,
+    tags: ['crystal'],
+    crystal: 'virdite',
+    school: 'earth',
+    description: 'Кристалл второго поколения — мощнее и стабильнее.',
+  },
 };
 
 export function getItemTemplate(templateId: string): Item {

@@ -7,24 +7,25 @@ import type {
 } from '../types/domain';
 import { createRng, type RNG } from './rng';
 
-// MVP-1: linear path with 6 nodes ending in extraction.
-// MVP-2: branching graph, multiple extraction points.
+// MVP-1.5: linear path driven by the template's nodeLayout.
+// Branching graphs land in MVP-2.
 
-const MINE_POOL = {
-  combat: ['mine_rat', 'stone_beetle', 'rogue_miner', 'ore_elemental'] as const,
-  boss: 'ancient_golem' as const,
+const DEFAULT_LABEL: Record<NodeType, string> = {
+  start: 'Вход',
+  combat: 'Стычка',
+  elite: 'Чемпион',
+  boss: 'Босс',
+  treasure: 'Сундук',
+  event: 'Событие',
+  rest: 'Привал',
+  extraction: 'Извлечение',
 };
 
-function pickCombatGroup(rng: RNG, elite: boolean): string[] {
-  const pool = [...MINE_POOL.combat];
+function pickCombatGroup(rng: RNG, pool: readonly string[], elite: boolean): string[] {
   const count = elite ? 3 : rng.int(1, 2);
   const out: string[] = [];
   for (let i = 0; i < count; i++) out.push(rng.pick(pool));
   return out;
-}
-
-function makeNode(id: string, type: NodeType, label: string): ExpeditionNode {
-  return { id, type, label };
 }
 
 export function generateExpedition(
@@ -35,31 +36,27 @@ export function generateExpedition(
   const nodes: ExpeditionNode[] = [];
   const edges: ExpeditionEdge[] = [];
 
-  // Linear plan for MVP-1
-  const plan: { type: NodeType; label: string }[] = [
-    { type: 'start', label: 'Вход в шахту' },
-    { type: 'combat', label: 'Стычка' },
-    { type: 'event', label: 'Странный символ' },
-    { type: 'combat', label: 'Засада' },
-    { type: 'treasure', label: 'Заброшенный сундук' },
-    { type: 'boss', label: 'Древний голем' },
-    { type: 'extraction', label: 'Выход на поверхность' },
-  ];
-
-  plan.forEach((p, i) => {
+  template.nodeLayout.forEach((type, i) => {
     const id = `n${i}`;
-    const node = makeNode(id, p.type, p.label);
-    if (p.type === 'combat') {
-      node.combat = { enemyTemplateIds: pickCombatGroup(rng.fork(i * 7 + 1), false) };
-    } else if (p.type === 'boss') {
-      node.combat = { enemyTemplateIds: [MINE_POOL.boss] };
-    } else if (p.type === 'treasure') {
-      node.treasure = { lootTableId: 'chest_mine' };
-    } else if (p.type === 'event') {
-      node.event = { eventId: 'mine_carving' };
-    } else if (p.type === 'extraction') {
-      node.extraction = { difficulty: 1 };
+    const label =
+      template.nodeLabels?.[i] ?? DEFAULT_LABEL[type] ?? 'Узел';
+    const node: ExpeditionNode = { id, type, label };
+
+    if (type === 'combat') {
+      node.combat = { enemyTemplateIds: pickCombatGroup(rng.fork(i * 7 + 1), template.combatPool, false) };
+    } else if (type === 'elite') {
+      node.combat = { enemyTemplateIds: pickCombatGroup(rng.fork(i * 11 + 3), template.combatPool, true) };
+    } else if (type === 'boss') {
+      node.combat = { enemyTemplateIds: [template.bossTemplateId] };
+    } else if (type === 'treasure') {
+      node.treasure = { lootTableId: template.chestLootTableId };
+    } else if (type === 'event') {
+      const pool = template.eventIds ?? ['mine_carving'];
+      node.event = { eventId: rng.pick(pool) };
+    } else if (type === 'extraction') {
+      node.extraction = { difficulty: template.portal ? 2 : 1 };
     }
+
     nodes.push(node);
     if (i > 0) edges.push({ from: `n${i - 1}`, to: id });
   });

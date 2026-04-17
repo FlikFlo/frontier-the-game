@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   Companion,
+  CrystalKind,
   CrystalStockpile,
   ExpeditionRun,
   FortressProgress,
@@ -85,7 +86,10 @@ export type GameActions = {
   resetNewGame: () => void;
   equipZir: (instanceId: string) => void;
   unequipZir: (instanceId: string) => void;
-  startExpedition: (templateId: string) => void;
+  startExpedition: (templateId: string) => { ok: boolean; message: string };
+  checkExpeditionCost: (
+    templateId: string,
+  ) => { ok: true } | { ok: false; missing: Partial<Record<CrystalKind, number>> };
   advanceToNode: (nodeId: string) => void;
   stashRaidLoot: (items: ItemInstance[]) => void; // add to current run's pouch
   extractRunSucceeded: () => void;
@@ -151,10 +155,42 @@ export const useGame = create<GameState & GameActions>()(
         });
       },
 
-      startExpedition: (templateId) => {
+      checkExpeditionCost: (templateId) => {
+        const s = get();
         const tpl = getExpeditionTemplate(templateId);
+        const missing: Partial<Record<CrystalKind, number>> = {};
+        for (const [kindStr, need] of Object.entries(tpl.crystalCost)) {
+          const kind = kindStr as CrystalKind;
+          if (!need) continue;
+          const have = s.crystals[kind] ?? 0;
+          if (have < need) missing[kind] = need - have;
+        }
+        if (Object.keys(missing).length === 0) return { ok: true };
+        return { ok: false, missing };
+      },
+
+      startExpedition: (templateId) => {
+        const s = get();
+        const tpl = getExpeditionTemplate(templateId);
+
+        // Enforce crystal cost upfront — portal consumes them even on failure.
+        const crystals: CrystalStockpile = { ...s.crystals };
+        for (const [kindStr, need] of Object.entries(tpl.crystalCost)) {
+          const kind = kindStr as CrystalKind;
+          if (!need) continue;
+          const have = crystals[kind] ?? 0;
+          if (have < need) {
+            return {
+              ok: false,
+              message: `Не хватает кристаллов для портала.`,
+            };
+          }
+          crystals[kind] = have - need;
+        }
+
         const run = generateExpedition(tpl, randomSeed());
-        set({ currentRun: run, lastResult: null });
+        set({ currentRun: run, lastResult: null, crystals });
+        return { ok: true, message: tpl.portal ? 'Портал стабилизирован.' : 'В путь.' };
       },
 
       advanceToNode: (nodeId) => {
