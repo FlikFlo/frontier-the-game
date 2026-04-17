@@ -7,6 +7,8 @@ import { getEnemyTemplate } from '../data/enemies';
 import { makeItem } from './items';
 import type { Companion, Hero, ItemInstance } from '../types/domain';
 
+const startingZir = makeItem('zir_stone_spike', 'soul');
+
 function makeHero(): Hero {
   const weapon = makeItem('ranger_sword', 'soul');
   const armor = makeItem('leather_vest', 'soul');
@@ -20,7 +22,7 @@ function makeHero(): Hero {
     stats: { attack: 10, magic: 4, defense: 3, speed: 10, critChance: 0.05 },
     equippedWeaponId: weapon.item.id,
     equippedArmorId: armor.item.id,
-    equippedZirIds: [],
+    equippedZirIds: [startingZir.item.id],
   };
 }
 
@@ -43,6 +45,7 @@ const hero = makeHero();
 const inv: ItemInstance[] = [
   makeItem('ranger_sword', 'soul'),
   makeItem('leather_vest', 'soul'),
+  startingZir,
 ];
 inv[0]!.item.id = hero.equippedWeaponId!;
 inv[1]!.item.id = hero.equippedArmorId!;

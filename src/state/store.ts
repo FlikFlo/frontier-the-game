@@ -14,6 +14,9 @@ import { makeItem } from '../systems/items';
 import { generateExpedition } from '../systems/expedition';
 import { getExpeditionTemplate } from '../data/expeditions';
 import { randomSeed } from '../systems/rng';
+import { applyCraft, checkRecipe } from '../systems/crafting';
+import { getRecipe } from '../data/recipes';
+import type { CraftCheck } from '../types/crafting';
 
 // --------- Initial state helpers ---------
 
@@ -49,15 +52,18 @@ function initialCompanion(): Companion {
   };
 }
 
-function initialInventory(heroWeaponId: string, heroArmorId: string): ItemInstance[] {
+function initialInventory(heroWeaponId: string, heroArmorId: string): {
+  items: ItemInstance[];
+  startingZirId: string;
+} {
   // Keep hero's equipped soul-gear in inventory list for lookup.
   const weapon = makeItem('ranger_sword', 'soul');
   weapon.item.id = heroWeaponId; // align id with hero equipment
   const armor = makeItem('leather_vest', 'soul');
   armor.item.id = heroArmorId;
   const zir1 = makeItem('zir_stone_spike', 'soul');
-  const zir2 = makeItem('potion_health_minor', 'raid');
-  return [weapon, armor, zir1, zir2];
+  const potion = makeItem('potion_health_minor', 'raid');
+  return { items: [weapon, armor, zir1, potion], startingZirId: zir1.item.id };
 }
 
 // --------- State shape ---------
@@ -85,6 +91,8 @@ export type GameActions = {
   extractRunSucceeded: () => void;
   extractRunFailed: (outcome: 'defeat' | 'flee') => void;
   awardXp: (amount: number) => void;
+  checkCraft: (recipeId: string) => CraftCheck;
+  craftItem: (recipeId: string) => { ok: boolean; message: string };
 };
 
 // --------- Store ---------
@@ -105,12 +113,16 @@ export const useGame = create<GameState & GameActions>()(
 
       resetNewGame: () => {
         const hero = initialHero();
+        const { items, startingZirId } = initialInventory(
+          hero.equippedWeaponId!,
+          hero.equippedArmorId!,
+        );
         set({
           version: 1,
           day: 1,
-          hero,
+          hero: { ...hero, equippedZirIds: [startingZirId] },
           companion: initialCompanion(),
-          inventory: initialInventory(hero.equippedWeaponId!, hero.equippedArmorId!),
+          inventory: items,
           inventoryCapacity: 12,
           crystals: { virdite: 0 },
           fortress: { portalRoomLevel: 1, infirmaryLevel: 1 },
@@ -207,6 +219,50 @@ export const useGame = create<GameState & GameActions>()(
       awardXp: (amount) => {
         const s = get();
         set({ hero: { ...s.hero, xp: s.hero.xp + amount } });
+      },
+
+      checkCraft: (recipeId) => {
+        const s = get();
+        const recipe = getRecipe(recipeId);
+        const locked = new Set<string>(
+          [s.hero.equippedWeaponId, s.hero.equippedArmorId, ...s.hero.equippedZirIds].filter(
+            (x): x is string => !!x,
+          ),
+        );
+        return checkRecipe(recipe, s.inventory, s.crystals, locked);
+      },
+
+      craftItem: (recipeId) => {
+        const s = get();
+        const recipe = getRecipe(recipeId);
+        const locked = new Set<string>(
+          [s.hero.equippedWeaponId, s.hero.equippedArmorId, ...s.hero.equippedZirIds].filter(
+            (x): x is string => !!x,
+          ),
+        );
+        const check = checkRecipe(recipe, s.inventory, s.crystals, locked);
+        if (!check.ok) {
+          return { ok: false, message: 'Не хватает ингредиентов.' };
+        }
+        const { inventory: nextInv, crystals: nextCrystals, produced } = applyCraft(
+          recipe,
+          s.inventory,
+          s.crystals,
+          locked,
+        );
+        const nextFill = nextInv.reduce((sum, x) => sum + x.item.size, 0);
+        if (nextFill > s.inventoryCapacity) {
+          return {
+            ok: false,
+            message: `Склад переполнен (нужно ${nextFill}/${s.inventoryCapacity}).`,
+          };
+        }
+        set({ inventory: nextInv, crystals: nextCrystals });
+        const name = produced[0]?.item.name ?? recipe.output.templateId;
+        return {
+          ok: true,
+          message: `Создано: ${name}${produced.length > 1 ? ` ×${produced.length}` : ''}`,
+        };
       },
     }),
     {

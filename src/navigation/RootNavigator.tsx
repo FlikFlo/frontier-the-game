@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from './types';
 import { FortressScreen } from '../screens/FortressScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
+import { CraftingScreen } from '../screens/CraftingScreen';
 import { ExpeditionMapScreen } from '../screens/ExpeditionMapScreen';
 import { CombatScreen } from '../screens/CombatScreen';
 import { NodeResolveScreen } from '../screens/NodeResolveScreen';
@@ -34,6 +35,7 @@ export function RootNavigator() {
       >
         <Stack.Screen name="Fortress" component={FortressScreen} />
         <Stack.Screen name="Inventory" component={InventoryScreen} />
+        <Stack.Screen name="Crafting" component={CraftingScreen} />
         <Stack.Screen name="ExpeditionMap" component={ExpeditionMapScreen} />
         <Stack.Screen name="Combat" component={CombatScreen} />
         <Stack.Screen name="NodeResolve" component={NodeResolveScreen} />

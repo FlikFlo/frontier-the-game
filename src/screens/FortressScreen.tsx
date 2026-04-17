@@ -102,12 +102,18 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
           ))}
         </View>
 
-        {/* Inventory */}
+        {/* Inventory & Crafting */}
         <Button
           label="Инвентарь и Зиры"
           variant="secondary"
           onPress={() => navigation.navigate('Inventory')}
           style={{ marginTop: spacing.md }}
+        />
+        <Button
+          label="Мастерская (алхимия и Зиры)"
+          variant="secondary"
+          onPress={() => navigation.navigate('Crafting')}
+          style={{ marginTop: spacing.sm }}
         />
       </ScrollView>
     </Screen>

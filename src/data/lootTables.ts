@@ -20,17 +20,19 @@ export const LOOT_TABLES: Record<string, LootTable> = {
     id: 'mine_basic',
     rolls: 1,
     entries: [
-      { templateId: 'stone_rough', weight: 6, min: 1, max: 3 },
+      { templateId: 'stone_rough', weight: 5, min: 1, max: 3 },
       { templateId: 'ore_iron', weight: 3, min: 1, max: 1 },
+      { templateId: 'mine_herb', weight: 4, min: 1, max: 2 },
       { templateId: 'crystal_virdite', weight: 1, min: 1, max: 1 },
     ],
   },
   mine_crystal: {
     id: 'mine_crystal',
-    rolls: 1,
+    rolls: 2,
     entries: [
       { templateId: 'crystal_virdite', weight: 3, min: 1, max: 2 },
       { templateId: 'ore_iron', weight: 2, min: 1, max: 2 },
+      { templateId: 'ink_essence', weight: 2, min: 1, max: 1 },
       { templateId: 'potion_health_minor', weight: 1, min: 1, max: 1 },
     ],
   },
@@ -39,6 +41,7 @@ export const LOOT_TABLES: Record<string, LootTable> = {
     guaranteed: [
       { templateId: 'crystal_virdite', weight: 1, min: 3, max: 5 },
       { templateId: 'ore_iron', weight: 1, min: 2, max: 3 },
+      { templateId: 'golem_core', weight: 1, min: 1, max: 1 },
     ],
     rolls: 1,
     entries: [
@@ -50,10 +53,12 @@ export const LOOT_TABLES: Record<string, LootTable> = {
     id: 'chest_mine',
     rolls: 2,
     entries: [
-      { templateId: 'potion_health_minor', weight: 4, min: 1, max: 2 },
+      { templateId: 'potion_health_minor', weight: 3, min: 1, max: 2 },
+      { templateId: 'crude_paper', weight: 4, min: 1, max: 2 },
+      { templateId: 'mine_herb', weight: 3, min: 1, max: 3 },
       { templateId: 'crystal_virdite', weight: 2, min: 1, max: 1 },
       { templateId: 'zir_heal_minor', weight: 1, min: 1, max: 1 },
-      { templateId: 'stone_rough', weight: 3, min: 1, max: 3 },
+      { templateId: 'ink_essence', weight: 1, min: 1, max: 1 },
     ],
   },
 };
