@@ -7,6 +7,7 @@ import { Screen } from '../components/Screen';
 import { colors, radii, spacing, typography } from '../theme/colors';
 import { useGame } from '../state/store';
 import { EXPEDITION_TEMPLATES } from '../data/expeditions';
+import { xpToNext } from '../systems/leveling';
 import type { CrystalKind } from '../types/domain';
 import type { ScreenProps } from '../navigation/types';
 
@@ -30,6 +31,8 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
   const startExpedition = useGame((s) => s.startExpedition);
   const checkExpeditionCost = useGame((s) => s.checkExpeditionCost);
   const lastResult = useGame((s) => s.lastResult);
+  const pendingLevelUps = useGame((s) => s.pendingLevelUps);
+  const clearLevelUps = useGame((s) => s.clearLevelUps);
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -65,6 +68,35 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
           </View>
         ) : null}
 
+        {pendingLevelUps.length > 0 ? (
+          <Animated.View
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(200)}
+            style={[styles.resultBanner, styles.bannerLevel]}
+          >
+            <Text style={[typography.body, { color: colors.accent }]}>
+              Уровень! {pendingLevelUps[0]!.fromLevel} → {pendingLevelUps[pendingLevelUps.length - 1]!.toLevel}
+            </Text>
+            <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+              +{pendingLevelUps.reduce((s, l) => s + l.hpGained, 0)} HP · +
+              {pendingLevelUps.reduce((s, l) => s + l.epGained, 0)} EP ·{' '}
+              {(() => {
+                const sums: Record<string, number> = {};
+                for (const l of pendingLevelUps) {
+                  for (const [k, v] of Object.entries(l.statsGained)) {
+                    sums[k] = (sums[k] ?? 0) + (v ?? 0);
+                  }
+                }
+                return Object.entries(sums)
+                  .map(([k, v]) => `+${v} ${k}`)
+                  .join(', ');
+              })()}
+            </Text>
+            <View style={{ height: spacing.sm }} />
+            <Button label="Отлично" onPress={clearLevelUps} />
+          </Animated.View>
+        ) : null}
+
         {/* Hero card */}
         <View style={styles.card}>
           <View style={styles.rowBetween}>
@@ -75,6 +107,8 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
           <Bar value={hero.hpMax} max={hero.hpMax} color={colors.hp} label="HP" />
           <View style={{ height: spacing.xs }} />
           <Bar value={hero.epMax} max={hero.epMax} color={colors.ep} label="EP" />
+          <View style={{ height: spacing.xs }} />
+          <Bar value={hero.xp} max={xpToNext(hero.level)} color={colors.accent} label="XP" />
           <View style={{ height: spacing.sm }} />
           <Text style={[typography.caption, { color: colors.textMuted }]}>
             Атака {hero.stats.attack} · Магия {hero.stats.magic} · Защита {hero.stats.defense} · Скорость {hero.stats.speed}
@@ -219,6 +253,7 @@ const styles = StyleSheet.create({
   },
   bannerOk: { backgroundColor: '#1d2d1d', borderColor: colors.success },
   bannerBad: { backgroundColor: '#2d1d1d', borderColor: colors.danger },
+  bannerLevel: { backgroundColor: '#2a2418', borderColor: colors.accent },
   expedition: {
     marginBottom: spacing.md,
     padding: spacing.md,

@@ -18,6 +18,7 @@ import { randomSeed } from '../systems/rng';
 import { applyCraft, checkRecipe } from '../systems/crafting';
 import { getRecipe } from '../data/recipes';
 import type { CraftCheck } from '../types/crafting';
+import { applyXp, type LevelUp } from '../systems/leveling';
 
 // --------- Initial state helpers ---------
 
@@ -80,6 +81,7 @@ export type GameState = {
   fortress: FortressProgress;
   currentRun: ExpeditionRun | null;
   lastResult: { outcome: 'victory' | 'defeat' | 'flee'; collectedCount: number } | null;
+  pendingLevelUps: LevelUp[];
 };
 
 export type GameActions = {
@@ -95,6 +97,7 @@ export type GameActions = {
   extractRunSucceeded: () => void;
   extractRunFailed: (outcome: 'defeat' | 'flee') => void;
   awardXp: (amount: number) => void;
+  clearLevelUps: () => void;
   checkCraft: (recipeId: string) => CraftCheck;
   craftItem: (recipeId: string) => { ok: boolean; message: string };
 };
@@ -114,6 +117,7 @@ export const useGame = create<GameState & GameActions>()(
       fortress: { portalRoomLevel: 1, infirmaryLevel: 1 },
       currentRun: null,
       lastResult: null,
+      pendingLevelUps: [],
 
       resetNewGame: () => {
         const hero = initialHero();
@@ -132,6 +136,7 @@ export const useGame = create<GameState & GameActions>()(
           fortress: { portalRoomLevel: 1, infirmaryLevel: 1 },
           currentRun: null,
           lastResult: null,
+          pendingLevelUps: [],
         });
       },
 
@@ -254,8 +259,14 @@ export const useGame = create<GameState & GameActions>()(
 
       awardXp: (amount) => {
         const s = get();
-        set({ hero: { ...s.hero, xp: s.hero.xp + amount } });
+        const { hero, levelUps } = applyXp(s.hero, amount);
+        set({
+          hero,
+          pendingLevelUps: [...s.pendingLevelUps, ...levelUps],
+        });
       },
+
+      clearLevelUps: () => set({ pendingLevelUps: [] }),
 
       checkCraft: (recipeId) => {
         const s = get();
