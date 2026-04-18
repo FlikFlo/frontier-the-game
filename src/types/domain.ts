@@ -208,6 +208,13 @@ export type TileContent = {
   eventId?: string;
   // Cartographer reveals tiles within `radius` of the cartographer's tile.
   cartographerRadius?: number;
+  // If the tile is a POI, these are populated by the generator.
+  poiId?: string;
+  poiName?: string;
+  poiFlavor?: string;
+  poiIcon?: string;                 // single-char glyph, e.g. ☗
+  poiLandmark?: boolean;            // visible through fog as silhouette
+  uniqueRewardTemplateId?: string;  // guaranteed drop on defeat / opening
 };
 
 export type Tile = {
@@ -221,6 +228,8 @@ export type Tile = {
   revealed: boolean;
   // Player has been on this tile and resolved its content (if any).
   explored: boolean;
+  // Player has scouted this tile — knows exact contents, not just the type.
+  scouted?: boolean;
 };
 
 export type TileGrid = {

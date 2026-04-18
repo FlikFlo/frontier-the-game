@@ -10,6 +10,7 @@ import type {
   TileGrid,
   TileType,
 } from '../types/domain';
+import { poisForTemplate, type Poi } from '../data/pois';
 import { createRng, type RNG } from './rng';
 
 type Coord = { x: number; y: number };
@@ -59,6 +60,15 @@ function pickPositions(free: Coord[], count: number, rng: RNG): Coord[] {
   for (let i = 0; i < count && pool.length > 0; i++) {
     const idx = rng.int(0, pool.length - 1);
     out.push(pool.splice(idx, 1)[0]!);
+  }
+  return out;
+}
+
+function shuffled<T>(arr: readonly T[], rng: RNG): T[] {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = rng.int(0, i);
+    [out[i], out[j]] = [out[j]!, out[i]!];
   }
   return out;
 }
@@ -214,11 +224,21 @@ export function walkableNeighbors(grid: TileGrid, tile: Tile): Tile[] {
 }
 
 // Reveal LOS: when player enters a tile, mark all 4-neighbors as revealed.
-export function revealAround(grid: TileGrid, fromTile: Tile, radius = 1): TileGrid {
+// `scoutDetails` additionally marks them as `scouted` — intel about actual
+// contents (enemy types, POI names) rather than just the tile shape.
+export function revealAround(
+  grid: TileGrid,
+  fromTile: Tile,
+  radius = 1,
+  scoutDetails = false,
+): TileGrid {
   const tiles = grid.tiles.map((t) => ({ ...t }));
   const apply = (x: number, y: number) => {
     const t = tiles[y * grid.width + x];
-    if (t) t.revealed = true;
+    if (t) {
+      t.revealed = true;
+      if (scoutDetails) t.scouted = true;
+    }
   };
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
@@ -251,12 +271,31 @@ export function generateExpeditionRun(
 
   // Resolve tile content templates (enemies / loot / events) deterministically.
   const rng = createRng(seed ^ 0xa5a5);
+  const startTile = grid.tiles.find((t) => t.id === grid.startId)!;
+  const maxDist = grid.width + grid.height;
+
+  // Scale difficulty: the farther a combat tile is from the portal entry,
+  // the stronger the enemy mix. Encourages pushing deeper for real reward.
+  const distance = (t: Tile) => Math.abs(t.x - startTile.x) + Math.abs(t.y - startTile.y);
+  const poolFor = (t: Tile, elite: boolean): string[] => {
+    const d = distance(t);
+    const depth = d / maxDist; // 0 near start, ~1 at far corner
+    const basePool = template.combatPool;
+    // Front of pool = easier enemies (early entries); back = harder.
+    // For MVP: simple slice by depth.
+    const startIdx = Math.floor(depth * (basePool.length - 1) * 0.5);
+    const weighted = basePool.slice(startIdx);
+    const count = elite ? 3 : rng.int(1, 2) + (depth > 0.6 ? 1 : 0);
+    const ids: string[] = [];
+    for (let i = 0; i < count; i++) ids.push(rng.pick(weighted));
+    return ids;
+  };
+
   for (const t of grid.tiles) {
-    if (t.type === 'combat' || t.type === 'elite') {
-      const count = t.type === 'elite' ? 3 : rng.int(1, 2);
-      const ids: string[] = [];
-      for (let i = 0; i < count; i++) ids.push(rng.pick(template.combatPool));
-      t.content = { enemyTemplateIds: ids };
+    if (t.type === 'combat') {
+      t.content = { enemyTemplateIds: poolFor(t, false) };
+    } else if (t.type === 'elite') {
+      t.content = { enemyTemplateIds: poolFor(t, true) };
     } else if (t.type === 'boss') {
       t.content = { enemyTemplateIds: [template.bossTemplateId] };
     } else if (t.type === 'treasure') {
@@ -269,8 +308,39 @@ export function generateExpeditionRun(
     }
   }
 
+  // Layer named POIs on top of appropriate tiles.
+  // Each POI overrides one tile's label + content, turning a nameless fight
+  // into a memorable beat like "Логово Железного Жука".
+  const poiPool = poisForTemplate(template.id);
+  if (poiPool.length > 0) {
+    const picked = shuffled(poiPool, rng).slice(0, Math.min(4, poiPool.length));
+    const claimed = new Set<string>();
+    for (const poi of picked) {
+      // Find the farthest unclaimed tile of the matching type (landmarks
+      // tend to be "beyond" something, so they pull the player forward).
+      const candidates = grid.tiles
+        .filter((t) => t.type === poi.tileType && !claimed.has(t.id))
+        .sort((a, b) => distance(b) - distance(a));
+      const target = candidates[0];
+      if (!target) continue;
+      claimed.add(target.id);
+      target.label = poi.name;
+      target.content = {
+        ...(target.content ?? {}),
+        enemyTemplateIds: poi.enemyTemplateIds ?? target.content?.enemyTemplateIds,
+        lootTableId: poi.lootTableId ?? target.content?.lootTableId,
+        eventId: poi.eventId ?? target.content?.eventId,
+        uniqueRewardTemplateId: poi.uniqueRewardTemplateId,
+        poiId: poi.id,
+        poiName: poi.name,
+        poiFlavor: poi.flavor,
+        poiIcon: poi.icon,
+        poiLandmark: poi.landmark,
+      };
+    }
+  }
+
   // Reveal initial LOS from start.
-  const startTile = grid.tiles.find((t) => t.id === grid.startId)!;
   const revealed = revealAround(grid, startTile, 1);
 
   return {

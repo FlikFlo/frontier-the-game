@@ -5,7 +5,7 @@ import { Screen } from '../components/Screen';
 import { colors, radii, spacing, typography } from '../theme/colors';
 import { useGame } from '../state/store';
 import { getEvent } from '../data/events';
-import { rollLoot } from '../systems/items';
+import { makeItem, rollLoot } from '../systems/items';
 import { createRng } from '../systems/rng';
 import type { ItemInstance } from '../types/domain';
 import type { ScreenProps } from '../navigation/types';
@@ -82,18 +82,22 @@ export function NodeResolveScreen({ navigation, route }: ScreenProps<'NodeResolv
 
   // ----- Treasure -----
   if (node.type === 'treasure') {
+    const poiName = tile?.content?.poiName;
+    const poiFlavor = tile?.content?.poiFlavor;
+    const uniqueReward = tile?.content?.uniqueRewardTemplateId;
     if (!resolved) {
       return (
         <Screen>
-          <Text style={typography.h2}>{node.label}</Text>
-          <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.sm }]}>
-            Старый сундук, покрытый пылью.
+          <Text style={typography.h2}>{poiName ?? node.label}</Text>
+          <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.sm, fontStyle: poiFlavor ? 'italic' : 'normal' }]}>
+            {poiFlavor ?? 'Старый сундук, покрытый пылью.'}
           </Text>
           <View style={{ height: spacing.lg }} />
           <Button
-            label="Открыть"
+            label="Осмотреть"
             onPress={() => {
               const loot = rollLoot(node.treasure!.lootTableId, rng, 'raid');
+              if (uniqueReward) loot.push(makeItem(uniqueReward, 'raid'));
               setResultMsg('Вы нашли:');
               setResultLoot(loot);
               setResolved(true);
@@ -104,7 +108,7 @@ export function NodeResolveScreen({ navigation, route }: ScreenProps<'NodeResolv
     }
     return (
       <Screen>
-        <Text style={typography.h2}>{resultMsg || 'Сундук открыт'}</Text>
+        <Text style={typography.h2}>{poiName ?? (resultMsg || 'Сундук открыт')}</Text>
         <View style={{ height: spacing.md }} />
         {resultLoot.map((inst) => (
           <LootRow key={inst.item.id} inst={inst} />

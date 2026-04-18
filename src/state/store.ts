@@ -30,6 +30,7 @@ import {
   tileAt,
   walkableNeighbors,
 } from '../systems/tileExpedition';
+import { loreForTemplate } from '../data/lore';
 
 // --------- Initial state helpers ---------
 
@@ -106,7 +107,7 @@ export type GameActions = {
   ) => { ok: true } | { ok: false; missing: Partial<Record<CrystalKind, number>> };
   advanceToNode: (nodeId: string) => void;
   // Tile-grid actions
-  moveToTile: (tileId: string) => { ok: boolean; message: string };
+  moveToTile: (tileId: string) => { ok: boolean; message: string; fragment?: string };
   scoutFromCurrent: () => { ok: boolean; message: string };
   triggerCartographer: (tileId: string) => void;
   clearTileContent: (tileId: string) => void;
@@ -268,7 +269,18 @@ export const useGame = create<GameState & GameActions>()(
             portalInstability: s.currentRun.portalInstability + 1,
           },
         });
-        return { ok: true, message: '' };
+
+        // If stepping into an already-empty tile (no encounter fires), 40%
+        // chance to surface a lore fragment — this is what makes the "empty"
+        // parts of the map feel like a world, not walking in circles.
+        let fragment: string | undefined;
+        if (target.type === 'empty') {
+          const pool = loreForTemplate(s.currentRun.templateId);
+          if (pool.length > 0 && Math.random() < 0.4) {
+            fragment = pool[Math.floor(Math.random() * pool.length)];
+          }
+        }
+        return { ok: true, message: '', fragment };
       },
 
       scoutFromCurrent: () => {
@@ -282,8 +294,8 @@ export const useGame = create<GameState & GameActions>()(
         const grid = s.currentRun.grid;
         const current = tileAt(grid, s.currentRun.currentTileId);
         if (!current) return { ok: false, message: 'Клетка не найдена.' };
-        // Reveal radius 2 from current — see two steps in any direction.
-        const nextGrid = revealAround(grid, current, 2);
+        // Scout: reveal radius 2 AND mark those tiles as scouted (detailed intel).
+        const nextGrid = revealAround(grid, current, 2, true);
         set({
           currentRun: {
             ...s.currentRun,
@@ -291,7 +303,7 @@ export const useGame = create<GameState & GameActions>()(
             provisions: s.currentRun.provisions - 1,
           },
         });
-        return { ok: true, message: 'Разведано. Провизия −1.' };
+        return { ok: true, message: 'Окрестности изучены. Знаешь, что там внутри.' };
       },
 
       triggerCartographer: (tileId) => {

@@ -9,6 +9,8 @@ import { colors, glass, layout, radii, spacing, typography } from '../theme/colo
 import { useGame } from '../state/store';
 import { tileAt, walkableNeighbors } from '../systems/tileExpedition';
 import { getExpeditionTemplate } from '../data/expeditions';
+import { getEnemyTemplate } from '../data/enemies';
+import { getItemTemplate } from '../data/items';
 import type { Tile, TileType } from '../types/domain';
 import type { ScreenProps } from '../navigation/types';
 
@@ -40,6 +42,28 @@ const TYPE_COLOR: Record<TileType, string> = {
   impassable: 'rgba(255,255,255,0.15)',
 };
 
+const TYPE_LABEL: Record<TileType, string> = {
+  empty: 'Пустая клетка',
+  combat: 'Стычка',
+  elite: 'Элитный отряд',
+  boss: 'Логово босса',
+  treasure: 'Сокровище',
+  event: 'Событие',
+  rest: 'Привал',
+  extraction: 'Точка извлечения',
+  cartographer: 'Картограф',
+  portal: 'Врата портала',
+  impassable: 'Непроходимо',
+};
+
+function safeItemName(id: string): string {
+  try {
+    return getItemTemplate(id).name;
+  } catch {
+    return id;
+  }
+}
+
 const TYPE_BG: Record<TileType, readonly [string, string]> = {
   empty: ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)'],
   combat: ['rgba(248,113,113,0.18)', 'rgba(248,113,113,0.04)'],
@@ -64,9 +88,15 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
   const extractRunFailed = useGame((s) => s.extractRunFailed);
 
   const [flash, setFlash] = useState<string | null>(null);
+  const [lore, setLore] = useState<string | null>(null);
+  const [hoveredTileId, setHoveredTileId] = useState<string | null>(null);
   const flashMessage = (text: string) => {
     setFlash(text);
     setTimeout(() => setFlash(null), 1600);
+  };
+  const showLore = (text: string) => {
+    setLore(text);
+    // Stays up until dismissed.
   };
 
   if (!run || !run.grid) {
@@ -89,21 +119,33 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
 
   const handleTilePress = (tile: Tile) => {
     if (!current) return;
-    if (tile.id === current.id) return;
+    if (tile.id === current.id) {
+      // Tapping current tile: show details if scouted, do nothing otherwise.
+      setHoveredTileId(tile.id);
+      return;
+    }
+    // First tap on a non-adjacent revealed tile = inspect it (intel panel).
+    // Second tap = try to move.
     if (!adjacentIds.has(tile.id)) {
-      flashMessage('Можно ходить только в соседнюю клетку.');
+      if (tile.revealed) {
+        setHoveredTileId(tile.id);
+      } else {
+        flashMessage('Клетка ещё в тумане — разведай.');
+      }
       return;
     }
     if (!tile.revealed) {
       flashMessage('Клетка ещё в тумане — разведай.');
       return;
     }
+    // Tap on a revealed adjacent tile: move + resolve.
     const r = moveToTile(tile.id);
     if (!r.ok) {
       flashMessage(r.message);
       return;
     }
-    // Trigger content based on tile type.
+    setHoveredTileId(null);
+    if (r.fragment) showLore(r.fragment);
     if (tile.type === 'combat' || tile.type === 'elite' || tile.type === 'boss') {
       navigation.navigate('Combat', { nodeId: tile.id });
     } else if (tile.type === 'treasure' || tile.type === 'event' || tile.type === 'extraction') {
@@ -113,7 +155,6 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
       clearTileContent(tile.id);
       flashMessage('Картограф открыл соседние земли.');
     } else if (tile.type === 'rest') {
-      // Heal a small amount; for now mark explored and clear.
       clearTileContent(tile.id);
       flashMessage('Привал. Дух героя восстановлен.');
     }
@@ -163,6 +204,24 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
         />
       </View>
 
+      {lore ? (
+        <Pressable onPress={() => setLore(null)} style={styles.loreWrap}>
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            exiting={FadeOut.duration(200)}
+            style={[styles.loreCard, glass.strong]}
+          >
+            <Text style={[typography.label, { color: colors.textMuted }]}>ПО ДОРОГЕ</Text>
+            <Text style={[typography.body, { color: colors.text, marginTop: spacing.xs, fontStyle: 'italic' }]}>
+              {lore}
+            </Text>
+            <Text style={[typography.caption, { color: colors.textDim, marginTop: spacing.sm, textAlign: 'right' }]}>
+              Нажми, чтобы закрыть
+            </Text>
+          </Animated.View>
+        </Pressable>
+      ) : null}
+
       <View style={styles.gridWrap}>
         {rows.map((row, y) => (
           <View key={`row-${y}`} style={styles.row}>
@@ -173,12 +232,69 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
                 size={cellSize}
                 isCurrent={t.id === current?.id}
                 isAdjacent={adjacentIds.has(t.id)}
+                isHovered={hoveredTileId === t.id}
                 onPress={() => handleTilePress(t)}
               />
             ))}
           </View>
         ))}
       </View>
+
+      {/* Intel panel for the currently-inspected / current tile */}
+      {(() => {
+        const inspectId = hoveredTileId ?? current?.id;
+        const t = inspectId ? grid.tiles.find((x) => x.id === inspectId) : undefined;
+        if (!t || !t.revealed) return null;
+        return (
+          <View style={[styles.intelCard, glass.card]}>
+            <View style={styles.intelHeader}>
+              <Text style={[typography.label, { color: colors.textMuted }]}>
+                {t.id === current?.id ? 'ТЕКУЩАЯ КЛЕТКА' : 'ОСМОТР'}
+              </Text>
+              <Text style={[typography.body, { color: colors.text, fontWeight: '700' }]}>
+                {t.content?.poiName ?? t.label ?? TYPE_LABEL[t.type]}
+              </Text>
+            </View>
+            {t.content?.poiFlavor && (t.scouted || t.explored) ? (
+              <Text style={[typography.caption, { color: colors.textMuted, fontStyle: 'italic', marginTop: 4 }]}>
+                {t.content.poiFlavor}
+              </Text>
+            ) : null}
+            {/* Scouted intel: show actual enemies/loot/reward */}
+            {t.scouted && !t.explored ? (
+              <View style={{ marginTop: spacing.xs }}>
+                {t.content?.enemyTemplateIds ? (
+                  <Text style={[typography.caption, { color: colors.danger }]}>
+                    ⚔ {t.content.enemyTemplateIds.map((id) => {
+                      try { return getEnemyTemplate(id).name; } catch { return id; }
+                    }).join(', ')}
+                  </Text>
+                ) : null}
+                {t.content?.uniqueRewardTemplateId ? (
+                  <Text style={[typography.caption, { color: colors.accentBright, marginTop: 2 }]}>
+                    ✦ Особая награда: {safeItemName(t.content.uniqueRewardTemplateId)}
+                  </Text>
+                ) : null}
+                {t.content?.lootTableId && !t.content?.uniqueRewardTemplateId ? (
+                  <Text style={[typography.caption, { color: colors.accent, marginTop: 2 }]}>
+                    ✦ Сокровище
+                  </Text>
+                ) : null}
+                {t.content?.eventId ? (
+                  <Text style={[typography.caption, { color: colors.primary, marginTop: 2 }]}>
+                    ? Событие
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+            {!t.scouted && !t.explored ? (
+              <Text style={[typography.caption, { color: colors.textDim, marginTop: spacing.xs }]}>
+                Разведка откроет содержимое.
+              </Text>
+            ) : null}
+          </View>
+        );
+      })()}
 
       <View style={styles.legendRow}>
         <Legend glyph="◉" color={colors.text} label="Здесь" />
@@ -242,29 +358,56 @@ function TileCell({
   size,
   isCurrent,
   isAdjacent,
+  isHovered,
   onPress,
 }: {
   tile: Tile;
   size: number;
   isCurrent: boolean;
   isAdjacent: boolean;
+  isHovered: boolean;
   onPress: () => void;
 }) {
   const isFog = !tile.revealed;
   const isImpassable = tile.type === 'impassable';
-  const glyph = isFog ? '?' : isCurrent ? '◉' : TYPE_GLYPH[tile.type];
-  const color = isFog ? colors.textDim : isCurrent ? colors.text : TYPE_COLOR[tile.type];
+  const isLandmark = !!tile.content?.poiLandmark;
+  const poiIcon = tile.content?.poiIcon;
+
+  // Even through fog, landmark POIs reveal as a dim silhouette — they pull
+  // the player toward them across the map.
+  const showLandmarkSilhouette = isFog && isLandmark;
+
+  const glyph = isFog
+    ? showLandmarkSilhouette
+      ? poiIcon ?? '◈'
+      : '?'
+    : isCurrent
+      ? '◉'
+      : poiIcon ?? TYPE_GLYPH[tile.type];
+  const color = isFog
+    ? showLandmarkSilhouette
+      ? 'rgba(228,191,90,0.45)'
+      : colors.textDim
+    : isCurrent
+      ? colors.text
+      : TYPE_COLOR[tile.type];
   const gradient = isFog
-    ? (['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.005)'] as const)
+    ? showLandmarkSilhouette
+      ? (['rgba(228,191,90,0.08)', 'rgba(228,191,90,0.01)'] as const)
+      : (['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.005)'] as const)
     : tile.explored && tile.type === 'empty'
       ? (['rgba(255,255,255,0.025)', 'rgba(255,255,255,0.005)'] as const)
       : TYPE_BG[tile.type];
 
   const border = isCurrent
     ? colors.accentBright
-    : isAdjacent && tile.revealed && !isImpassable
-      ? colors.primary
-      : 'rgba(255,255,255,0.06)';
+    : isHovered
+      ? colors.accent
+      : isAdjacent && tile.revealed && !isImpassable
+        ? colors.primary
+        : showLandmarkSilhouette
+          ? 'rgba(228,191,90,0.35)'
+          : 'rgba(255,255,255,0.06)';
 
   return (
     <Pressable
@@ -289,6 +432,11 @@ function TileCell({
         end={{ x: 1, y: 1 }}
       />
       <Text style={[styles.glyph, { color, fontSize: size * 0.4 }]}>{glyph}</Text>
+      {/* Scouted details: subtle dot in corner so player knows they have intel. */}
+      {tile.scouted && !tile.explored ? (
+        <View style={styles.scoutedMark} />
+      ) : null}
+      {/* Explored empty tile: darker overlay */}
       {tile.explored && tile.type === 'empty' && !isCurrent ? (
         <View
           style={[
@@ -368,5 +516,40 @@ const styles = StyleSheet.create({
   controlsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  loreWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    zIndex: 50,
+    backgroundColor: 'rgba(5, 3, 12, 0.7)',
+  },
+  loreCard: {
+    maxWidth: 420,
+    padding: spacing.lg,
+    borderRadius: radii.lg,
+  },
+  intelCard: {
+    padding: spacing.md,
+    borderRadius: radii.md,
+    marginVertical: spacing.sm,
+  },
+  intelHeader: {
+    flexDirection: 'column',
+    gap: 2,
+  },
+  scoutedMark: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accentBright,
   },
 });

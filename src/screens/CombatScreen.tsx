@@ -16,7 +16,7 @@ import { useGame } from '../state/store';
 import { getEnemyTemplate } from '../data/enemies';
 import { buildCombat, stepCombat } from '../systems/combat';
 import { createRng } from '../systems/rng';
-import { rollLoot } from '../systems/items';
+import { makeItem, rollLoot } from '../systems/items';
 import type { CombatState, Combatant, CombatLogEntry, FormationRow } from '../types/combat';
 import type { ScreenProps } from '../navigation/types';
 
@@ -249,10 +249,11 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
   const clearTileContent = useGame((s) => s.clearTileContent);
 
   // Resolve combat content: prefer tile (new), fall back to legacy node.
-  const tileEnemyIds: string[] | undefined = run?.grid
-    ? run.grid.tiles.find((t) => t.id === nodeId)?.content?.enemyTemplateIds
-    : undefined;
-  const tileLabel = run?.grid?.tiles.find((t) => t.id === nodeId)?.label;
+  const tile = run?.grid?.tiles.find((t) => t.id === nodeId);
+  const tileEnemyIds: string[] | undefined = tile?.content?.enemyTemplateIds;
+  const tileLabel = tile?.content?.poiName ?? tile?.label;
+  const tileFlavor = tile?.content?.poiFlavor;
+  const uniqueRewardId = tile?.content?.uniqueRewardTemplateId;
   const node = run?.nodes.find((n) => n.id === nodeId);
   const enemyIds: string[] | undefined = tileEnemyIds ?? node?.combat?.enemyTemplateIds;
 
@@ -332,9 +333,12 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
       xp += tpl.xpReward;
       return tpl.lootTableId ? rollLoot(tpl.lootTableId, rng, 'raid') : [];
     });
+    // Named POIs drop a guaranteed unique reward so landmarks feel worth it.
+    if (uniqueRewardId) {
+      loot.push(makeItem(uniqueRewardId, 'raid'));
+    }
     awardXp(xp);
     if (loot.length > 0) stashRaidLoot(loot);
-    // Mark the tile as cleared so re-entering doesn't re-trigger the fight.
     if (run.grid) clearTileContent(nodeId);
     navigation.replace('ExpeditionMap');
   };
@@ -347,9 +351,19 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
   return (
     <Screen>
       <View style={styles.header}>
-        <Text style={typography.h3} numberOfLines={1}>
-          {tileLabel ?? node?.label ?? 'Бой'}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={typography.h3} numberOfLines={1}>
+            {tileLabel ?? node?.label ?? 'Бой'}
+          </Text>
+          {tileFlavor && state.turn < 2 ? (
+            <Text
+              style={[typography.caption, { color: colors.textMuted, fontStyle: 'italic', marginTop: 2 }]}
+              numberOfLines={2}
+            >
+              {tileFlavor}
+            </Text>
+          ) : null}
+        </View>
         <Text style={[typography.caption, { color: colors.textMuted }]}>Ход {state.turn}</Text>
       </View>
 
