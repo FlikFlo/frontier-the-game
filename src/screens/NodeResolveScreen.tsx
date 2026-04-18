@@ -16,9 +16,19 @@ export function NodeResolveScreen({ navigation, route }: ScreenProps<'NodeResolv
   const stashRaidLoot = useGame((s) => s.stashRaidLoot);
   const extractRunSucceeded = useGame((s) => s.extractRunSucceeded);
   const clearTileContent = useGame((s) => s.clearTileContent);
+  const clearMapNodeContent = useGame((s) => s.clearMapNodeContent);
 
-  // Resolve to either a legacy node or a grid tile.
-  const tile = run?.grid?.tiles.find((t) => t.id === nodeId);
+  // Resolve to overworld map node, grid tile, or legacy node (in that order).
+  const mapNode = run?.map?.nodes.find((n) => n.id === nodeId);
+  const tile = mapNode
+    ? {
+        type: mapNode.type,
+        label: mapNode.label,
+        content: mapNode.content,
+        scouted: mapNode.scouted,
+        explored: mapNode.visited,
+      }
+    : run?.grid?.tiles.find((t) => t.id === nodeId);
   const legacyNode = run?.nodes.find((n) => n.id === nodeId);
 
   type ResolvedNode = {
@@ -76,7 +86,8 @@ export function NodeResolveScreen({ navigation, route }: ScreenProps<'NodeResolv
 
   const goBackToMap = () => {
     if (resultLoot.length > 0) stashRaidLoot(resultLoot);
-    if (tile) clearTileContent(nodeId);
+    if (mapNode) clearMapNodeContent(nodeId);
+    else if (tile) clearTileContent(nodeId);
     navigation.replace('ExpeditionMap');
   };
 

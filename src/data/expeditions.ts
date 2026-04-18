@@ -37,6 +37,7 @@ export const EXPEDITION_TEMPLATES: Record<string, ExpeditionTemplate> = {
     description:
       'Заброшенная шахта у подножия снежной горы. Источник Вирдита и самая близкая цель для молодого героя.',
     grid: MINE_GRID,
+    scene: 'mine',
     combatPool: ['mine_rat', 'stone_beetle', 'rogue_miner', 'ore_elemental'],
     bossTemplateId: 'ancient_golem',
     chestLootTableId: 'chest_mine',
@@ -53,6 +54,7 @@ export const EXPEDITION_TEMPLATES: Record<string, ExpeditionTemplate> = {
     description:
       'Портальный мир из живого камня. Бесконечный лабиринт, стены которого медленно дышат. Здесь добывают Живой Камень и Большие Вирдиты.',
     grid: EMERALD_GRID,
+    scene: 'emerald_reach',
     combatPool: ['stone_guard', 'crystal_spider', 'wandering_slab'],
     bossTemplateId: 'maze_heart',
     chestLootTableId: 'emerald_chest',

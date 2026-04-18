@@ -247,15 +247,22 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
   const extractRunFailed = useGame((s) => s.extractRunFailed);
   const awardXp = useGame((s) => s.awardXp);
   const clearTileContent = useGame((s) => s.clearTileContent);
+  const clearMapNodeContent = useGame((s) => s.clearMapNodeContent);
 
-  // Resolve combat content: prefer tile (new), fall back to legacy node.
+  // Resolve combat content: prefer overworld map node, then tile, then legacy node.
+  const mapNode = run?.map?.nodes.find((n) => n.id === nodeId);
   const tile = run?.grid?.tiles.find((t) => t.id === nodeId);
-  const tileEnemyIds: string[] | undefined = tile?.content?.enemyTemplateIds;
-  const tileLabel = tile?.content?.poiName ?? tile?.label;
-  const tileFlavor = tile?.content?.poiFlavor;
-  const uniqueRewardId = tile?.content?.uniqueRewardTemplateId;
   const node = run?.nodes.find((n) => n.id === nodeId);
-  const enemyIds: string[] | undefined = tileEnemyIds ?? node?.combat?.enemyTemplateIds;
+
+  const enemyIds: string[] | undefined =
+    mapNode?.content?.enemyTemplateIds ??
+    tile?.content?.enemyTemplateIds ??
+    node?.combat?.enemyTemplateIds;
+  const tileLabel =
+    mapNode?.content?.poiName ?? mapNode?.label ?? tile?.content?.poiName ?? tile?.label;
+  const tileFlavor = mapNode?.content?.poiFlavor ?? tile?.content?.poiFlavor;
+  const uniqueRewardId =
+    mapNode?.content?.uniqueRewardTemplateId ?? tile?.content?.uniqueRewardTemplateId;
 
   const { initial, seed } = useMemo(() => {
     if (!enemyIds || enemyIds.length === 0) {
@@ -339,7 +346,8 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
     }
     awardXp(xp);
     if (loot.length > 0) stashRaidLoot(loot);
-    if (run.grid) clearTileContent(nodeId);
+    if (run.map) clearMapNodeContent(nodeId);
+    else if (run.grid) clearTileContent(nodeId);
     navigation.replace('ExpeditionMap');
   };
 

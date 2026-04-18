@@ -184,7 +184,40 @@ export type ExpeditionLayout = {
   startNodeId: string;
 };
 
-// ----- Tile-based exploration (MVP-3) -----
+// ----- Overworld Map (MVP-4) -----
+// Illustrated 2D scene with hand-placed nodes and paths between them.
+// Replaces the grid of cells — the map looks like a painted dungeon now.
+
+export type MapNode = {
+  id: string;
+  x: number;                 // SVG viewBox coord
+  y: number;
+  type: TileType;
+  label?: string;
+  content?: TileContent;
+  discovered: boolean;       // visible (icon shown)
+  visited: boolean;          // player has been here; content resolved
+  scouted?: boolean;
+};
+
+export type MapEdge = {
+  id: string;
+  from: string;
+  to: string;
+  // Encounter chance when travelling this edge (0..1).
+  encounterChance?: number;
+};
+
+export type SceneKind = 'mine' | 'emerald_reach';
+
+export type OverworldMap = {
+  sceneKind: SceneKind;
+  viewWidth: number;         // SVG viewBox width
+  viewHeight: number;
+  nodes: MapNode[];
+  edges: MapEdge[];
+  startNodeId: string;
+};
 // Each expedition is a small grid you reveal one step at a time.
 // Replaces the linear node DAG; the old layout type stays for templates
 // that haven't been migrated yet.
@@ -265,6 +298,10 @@ export type ExpeditionTemplate = {
   layout?: ExpeditionLayout;
   // New tile-based config.
   grid?: GridConfig;
+  // MVP-4: scene kind drives which illustrated backdrop renders behind the
+  // overworld map. The node layout is generated procedurally but seeded
+  // from scene + seed so it stays stable within a run.
+  scene?: SceneKind;
   combatPool: string[];
   bossTemplateId: string;
   chestLootTableId: string;
@@ -283,6 +320,9 @@ export type ExpeditionRun = {
   // New: tile-based exploration grid (preferred path).
   grid?: TileGrid;
   currentTileId?: string;
+  // MVP-4: illustrated overworld map.
+  map?: OverworldMap;
+  currentMapNodeId?: string;
   // Provisions: spent to scout. Refilled before each expedition.
   provisions: number;
   raidLoot: ItemInstance[];

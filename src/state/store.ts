@@ -30,6 +30,15 @@ import {
   tileAt,
   walkableNeighbors,
 } from '../systems/tileExpedition';
+import {
+  adjacentNodes,
+  discoverFromNode,
+  generateOverworldRun,
+  mapNodeAt,
+  markNodeVisited,
+  scoutRadius,
+  setNodeContent,
+} from '../systems/overworld';
 import { loreForTemplate } from '../data/lore';
 
 // --------- Initial state helpers ---------
@@ -108,6 +117,13 @@ export type GameActions = {
   advanceToNode: (nodeId: string) => void;
   // Tile-grid actions
   moveToTile: (tileId: string) => { ok: boolean; message: string; fragment?: string };
+  // Overworld map actions (MVP-4)
+  travelToMapNode: (
+    nodeId: string,
+  ) => { ok: boolean; message: string; fragment?: string };
+  scoutMapFromCurrent: () => { ok: boolean; message: string };
+  clearMapNodeContent: (nodeId: string) => void;
+  triggerMapCartographer: (nodeId: string) => void;
   scoutFromCurrent: () => { ok: boolean; message: string };
   triggerCartographer: (tileId: string) => void;
   clearTileContent: (tileId: string) => void;
@@ -234,9 +250,16 @@ export const useGame = create<GameState & GameActions>()(
           crystals[kind] = have - need;
         }
 
-        const run = tpl.grid
-          ? generateExpeditionRun(tpl, randomSeed())
-          : generateExpedition(tpl, randomSeed());
+        // New default: overworld illustrated map. Fall back to older systems
+        // (tile grid, linear layout) if the template hasn't been migrated.
+        let run;
+        if (tpl.scene) {
+          run = generateOverworldRun(tpl, randomSeed());
+        } else if (tpl.grid) {
+          run = generateExpeditionRun(tpl, randomSeed());
+        } else {
+          run = generateExpedition(tpl, randomSeed());
+        }
         set({ currentRun: run, lastResult: null, crystals });
         return { ok: true, message: tpl.portal ? 'Портал стабилизирован.' : 'В путь.' };
       },
@@ -323,11 +346,90 @@ export const useGame = create<GameState & GameActions>()(
 
       clearTileContent: (tileId) => {
         const s = get();
-        if (!s.currentRun || !s.currentRun.grid) return;
-        const nextGrid = setTileType(s.currentRun.grid, tileId, 'empty');
+        if (!s.currentRun) return;
+        if (s.currentRun.grid) {
+          const nextGrid = setTileType(s.currentRun.grid, tileId, 'empty');
+          set({ currentRun: { ...s.currentRun, grid: nextGrid } });
+        } else if (s.currentRun.map) {
+          const nextMap = setNodeContent(s.currentRun.map, tileId, {
+            type: 'empty',
+            label: undefined,
+            content: undefined,
+          });
+          set({ currentRun: { ...s.currentRun, map: nextMap } });
+        }
+      },
+
+      travelToMapNode: (nodeId) => {
+        const s = get();
+        if (!s.currentRun || !s.currentRun.map || !s.currentRun.currentMapNodeId) {
+          return { ok: false, message: 'Нет активной вылазки.' };
+        }
+        const map = s.currentRun.map;
+        const current = mapNodeAt(map, s.currentRun.currentMapNodeId);
+        if (!current) return { ok: false, message: 'Текущая точка не найдена.' };
+        const target = mapNodeAt(map, nodeId);
+        if (!target) return { ok: false, message: 'Точка не найдена.' };
+        const isAdjacent = adjacentNodes(map, current.id).some((n) => n.id === nodeId);
+        if (!isAdjacent) return { ok: false, message: 'Туда напрямую не добраться.' };
+        if (!target.discovered) return { ok: false, message: 'Эта область ещё не раскрыта.' };
+
+        let nextMap = markNodeVisited(map, target.id);
+        nextMap = discoverFromNode(nextMap, target.id);
         set({
-          currentRun: { ...s.currentRun, grid: nextGrid },
+          currentRun: {
+            ...s.currentRun,
+            map: nextMap,
+            currentMapNodeId: target.id,
+            portalInstability: s.currentRun.portalInstability + 1,
+          },
         });
+
+        let fragment: string | undefined;
+        if (target.type === 'empty') {
+          const pool = loreForTemplate(s.currentRun.templateId);
+          if (pool.length > 0 && Math.random() < 0.4) {
+            fragment = pool[Math.floor(Math.random() * pool.length)];
+          }
+        }
+        return { ok: true, message: '', fragment };
+      },
+
+      scoutMapFromCurrent: () => {
+        const s = get();
+        if (!s.currentRun || !s.currentRun.map || !s.currentRun.currentMapNodeId) {
+          return { ok: false, message: 'Нет активной вылазки.' };
+        }
+        if (s.currentRun.provisions <= 0) {
+          return { ok: false, message: 'Не хватает провизии для разведки.' };
+        }
+        const nextMap = scoutRadius(s.currentRun.map, s.currentRun.currentMapNodeId, 2);
+        set({
+          currentRun: {
+            ...s.currentRun,
+            map: nextMap,
+            provisions: s.currentRun.provisions - 1,
+          },
+        });
+        return { ok: true, message: 'Окрестности разведаны.' };
+      },
+
+      clearMapNodeContent: (nodeId) => {
+        const s = get();
+        if (!s.currentRun || !s.currentRun.map) return;
+        const nextMap = setNodeContent(s.currentRun.map, nodeId, {
+          type: 'empty',
+          label: undefined,
+          content: undefined,
+        });
+        set({ currentRun: { ...s.currentRun, map: nextMap } });
+      },
+
+      triggerMapCartographer: (nodeId) => {
+        const s = get();
+        if (!s.currentRun || !s.currentRun.map) return;
+        const nextMap = scoutRadius(s.currentRun.map, nodeId, 2);
+        set({ currentRun: { ...s.currentRun, map: nextMap } });
       },
 
       advanceToNode: (nodeId) => {

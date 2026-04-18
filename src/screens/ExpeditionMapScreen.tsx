@@ -1,17 +1,32 @@
 import React, { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import Svg, { Circle, G, Line, Path } from 'react-native-svg';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { Bar } from '../components/Bar';
 import { colors, glass, layout, radii, spacing, typography } from '../theme/colors';
 import { useGame } from '../state/store';
-import { tileAt, walkableNeighbors } from '../systems/tileExpedition';
+import { adjacentNodes } from '../systems/overworld';
 import { getExpeditionTemplate } from '../data/expeditions';
 import { getEnemyTemplate } from '../data/enemies';
 import { getItemTemplate } from '../data/items';
-import type { Tile, TileType } from '../types/domain';
+import { MineScene, EmeraldReachScene } from '../art/scenes';
+import type { MapEdge, MapNode, OverworldMap, TileType } from '../types/domain';
 import type { ScreenProps } from '../navigation/types';
 
 const TYPE_GLYPH: Record<TileType, string> = {
@@ -24,26 +39,26 @@ const TYPE_GLYPH: Record<TileType, string> = {
   rest: '♨',
   extraction: '⇪',
   cartographer: '◈',
-  portal: '◉',
+  portal: '⌂',
   impassable: '▲',
 };
 
 const TYPE_COLOR: Record<TileType, string> = {
-  empty: colors.textDim,
-  combat: colors.danger,
+  empty: 'rgba(255,255,255,0.5)',
+  combat: '#f87171',
   elite: '#fb923c',
   boss: '#f43f5e',
-  treasure: colors.accent,
+  treasure: '#e4bf5a',
   event: '#a7d7ff',
-  rest: colors.success,
-  extraction: colors.accentBright,
+  rest: '#4ade80',
+  extraction: '#ffd879',
   cartographer: '#c4b4ff',
-  portal: colors.text,
-  impassable: 'rgba(255,255,255,0.15)',
+  portal: '#ffffff',
+  impassable: 'rgba(255,255,255,0.2)',
 };
 
 const TYPE_LABEL: Record<TileType, string> = {
-  empty: 'Пустая клетка',
+  empty: 'Пустая точка',
   combat: 'Стычка',
   elite: 'Элитный отряд',
   boss: 'Логово босса',
@@ -64,42 +79,25 @@ function safeItemName(id: string): string {
   }
 }
 
-const TYPE_BG: Record<TileType, readonly [string, string]> = {
-  empty: ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)'],
-  combat: ['rgba(248,113,113,0.18)', 'rgba(248,113,113,0.04)'],
-  elite: ['rgba(251,146,60,0.20)', 'rgba(251,146,60,0.04)'],
-  boss: ['rgba(244,63,94,0.28)', 'rgba(244,63,94,0.06)'],
-  treasure: ['rgba(228,191,90,0.22)', 'rgba(228,191,90,0.04)'],
-  event: ['rgba(167,215,255,0.18)', 'rgba(167,215,255,0.04)'],
-  rest: ['rgba(34,197,94,0.18)', 'rgba(34,197,94,0.04)'],
-  extraction: ['rgba(255,216,121,0.30)', 'rgba(255,216,121,0.05)'],
-  cartographer: ['rgba(196,180,255,0.22)', 'rgba(196,180,255,0.04)'],
-  portal: ['rgba(167,139,250,0.30)', 'rgba(167,139,250,0.05)'],
-  impassable: ['rgba(40,40,55,0.6)', 'rgba(20,20,30,0.6)'],
-};
-
 export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>) {
   const run = useGame((s) => s.currentRun);
-  const moveToTile = useGame((s) => s.moveToTile);
-  const scoutFromCurrent = useGame((s) => s.scoutFromCurrent);
-  const triggerCartographer = useGame((s) => s.triggerCartographer);
-  const clearTileContent = useGame((s) => s.clearTileContent);
-  const stashRaidLoot = useGame((s) => s.stashRaidLoot);
+  const travelToMapNode = useGame((s) => s.travelToMapNode);
+  const scoutMapFromCurrent = useGame((s) => s.scoutMapFromCurrent);
+  const triggerMapCartographer = useGame((s) => s.triggerMapCartographer);
+  const clearMapNodeContent = useGame((s) => s.clearMapNodeContent);
   const extractRunFailed = useGame((s) => s.extractRunFailed);
 
   const [flash, setFlash] = useState<string | null>(null);
   const [lore, setLore] = useState<string | null>(null);
-  const [hoveredTileId, setHoveredTileId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewSize, setViewSize] = useState({ width: 0, height: 0 });
+
   const flashMessage = (text: string) => {
     setFlash(text);
     setTimeout(() => setFlash(null), 1600);
   };
-  const showLore = (text: string) => {
-    setLore(text);
-    // Stays up until dismissed.
-  };
 
-  if (!run || !run.grid) {
+  if (!run || !run.map || !run.currentMapNodeId) {
     return (
       <Screen>
         <Text style={[typography.body, { color: colors.text }]}>Нет активной вылазки.</Text>
@@ -110,53 +108,47 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
   }
 
   const template = getExpeditionTemplate(run.templateId);
-  const grid = run.grid;
-  const current = tileAt(grid, run.currentTileId!);
-  const adjacentIds = useMemo(() => {
-    if (!current) return new Set<string>();
-    return new Set(walkableNeighbors(grid, current).map((t) => t.id));
-  }, [grid, current]);
+  const map: OverworldMap = run.map;
+  const currentId = run.currentMapNodeId;
+  const current = map.nodes.find((n) => n.id === currentId)!;
+  const adjIds = useMemo(
+    () => new Set(adjacentNodes(map, currentId).map((n) => n.id)),
+    [map, currentId],
+  );
 
-  const handleTilePress = (tile: Tile) => {
-    if (!current) return;
-    if (tile.id === current.id) {
-      // Tapping current tile: show details if scouted, do nothing otherwise.
-      setHoveredTileId(tile.id);
+  const inspectedId = selectedId ?? currentId;
+  const inspected = map.nodes.find((n) => n.id === inspectedId);
+
+  const onNodeTap = (n: MapNode) => {
+    if (n.id === currentId) {
+      setSelectedId(n.id);
       return;
     }
-    // First tap on a non-adjacent revealed tile = inspect it (intel panel).
-    // Second tap = try to move.
-    if (!adjacentIds.has(tile.id)) {
-      if (tile.revealed) {
-        setHoveredTileId(tile.id);
-      } else {
-        flashMessage('Клетка ещё в тумане — разведай.');
-      }
+    // If player taps a non-adjacent node or a fogged node, just inspect it.
+    if (!adjIds.has(n.id) || !n.discovered) {
+      if (n.discovered) setSelectedId(n.id);
+      else flashMessage('Эта область ещё не раскрыта.');
       return;
     }
-    if (!tile.revealed) {
-      flashMessage('Клетка ещё в тумане — разведай.');
-      return;
-    }
-    // Tap on a revealed adjacent tile: move + resolve.
-    const r = moveToTile(tile.id);
+    // Adjacent + discovered: travel.
+    const r = travelToMapNode(n.id);
     if (!r.ok) {
       flashMessage(r.message);
       return;
     }
-    setHoveredTileId(null);
-    if (r.fragment) showLore(r.fragment);
-    if (tile.type === 'combat' || tile.type === 'elite' || tile.type === 'boss') {
-      navigation.navigate('Combat', { nodeId: tile.id });
-    } else if (tile.type === 'treasure' || tile.type === 'event' || tile.type === 'extraction') {
-      navigation.navigate('NodeResolve', { nodeId: tile.id });
-    } else if (tile.type === 'cartographer') {
-      triggerCartographer(tile.id);
-      clearTileContent(tile.id);
-      flashMessage('Картограф открыл соседние земли.');
-    } else if (tile.type === 'rest') {
-      clearTileContent(tile.id);
-      flashMessage('Привал. Дух героя восстановлен.');
+    setSelectedId(null);
+    if (r.fragment) setLore(r.fragment);
+    if (n.type === 'combat' || n.type === 'elite' || n.type === 'boss') {
+      navigation.navigate('Combat', { nodeId: n.id });
+    } else if (n.type === 'treasure' || n.type === 'event' || n.type === 'extraction') {
+      navigation.navigate('NodeResolve', { nodeId: n.id });
+    } else if (n.type === 'cartographer') {
+      triggerMapCartographer(n.id);
+      clearMapNodeContent(n.id);
+      flashMessage('Картограф раскрыл окрестные тропы.');
+    } else if (n.type === 'rest') {
+      clearMapNodeContent(n.id);
+      flashMessage('Привал. Герой переводит дыхание.');
     }
   };
 
@@ -165,44 +157,273 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
     navigation.navigate('Fortress');
   };
 
-  const cellSize = Math.min(
-    Math.floor((layout.maxContentWidth - spacing.lg * 2) / grid.width) - spacing.xs,
-    72,
-  );
+  // Coordinate helpers — SVG viewBox → on-screen px.
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setViewSize({ width, height });
+  };
+  const scaleX = viewSize.width / map.viewWidth;
+  const scaleY = viewSize.height / map.viewHeight;
+  const scale = Math.min(scaleX || 0, scaleY || 0);
+  const offsetX = (viewSize.width - map.viewWidth * scale) / 2;
+  const offsetY = (viewSize.height - map.viewHeight * scale) / 2;
+  const toScreen = (x: number, y: number) => ({
+    x: x * scale + offsetX,
+    y: y * scale + offsetY,
+  });
 
-  // Build an integer index for rendering rows.
-  const rows: Tile[][] = [];
-  for (let y = 0; y < grid.height; y++) {
-    const row: Tile[] = [];
-    for (let x = 0; x < grid.width; x++) {
-      row.push(grid.tiles[y * grid.width + x]!);
-    }
-    rows.push(row);
+  // Hero sprite position (animated).
+  const heroX = useSharedValue(0);
+  const heroY = useSharedValue(0);
+  const heroReady = viewSize.width > 0;
+  if (heroReady) {
+    const p = toScreen(current.x, current.y);
+    // Animate to current tile's position (viewBox might change on resize).
+    heroX.value = withTiming(p.x, { duration: 520 });
+    heroY.value = withTiming(p.y, { duration: 520 });
   }
+  const heroStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: heroX.value - 14 },
+      { translateY: heroY.value - 26 },
+    ],
+  }));
 
   return (
-    <Screen>
-      <View style={styles.titleRow}>
+    <Screen padded={false}>
+      {/* Top info strip */}
+      <View style={styles.topInfo}>
         <View style={{ flex: 1 }}>
           <Text style={[typography.label, { color: colors.textMuted }]}>ВЫЛАЗКА</Text>
-          <Text style={[typography.h1, { color: colors.text }]}>{template.name}</Text>
+          <Text style={[typography.h2, { color: colors.text }]}>{template.name}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[typography.label, { color: colors.textMuted }]}>ПРОВИЗИЯ</Text>
+          <Text style={[typography.h2, { color: colors.accentBright }]}>{run.provisions}</Text>
         </View>
       </View>
 
-      <View style={[styles.headerCard, glass.card]}>
-        <View style={styles.statsRow}>
-          <Stat label="ПРОВИЗИЯ" value={`${run.provisions}`} />
-          <Stat label="СОБРАНО" value={`${run.raidLoot.length}`} />
-          <Stat label="ШАГОВ" value={`${grid.tiles.filter((t) => t.explored).length - 1}`} />
-        </View>
-        <View style={{ height: spacing.sm }} />
+      <View style={styles.instabilityWrap}>
         <Bar
           value={run.portalInstability}
-          max={Math.max(grid.tiles.length, 1)}
+          max={Math.max(map.nodes.length, 1)}
           color={colors.warn}
-          label="Нестабильность портала"
+          label="Нестабильность"
+          compact
         />
       </View>
+
+      {/* The illustrated scene */}
+      <View style={styles.stage} onLayout={onLayout}>
+        {map.sceneKind === 'mine' ? <MineScene /> : <EmeraldReachScene />}
+
+        {/* Edges and nodes drawn inside an absolute SVG overlay */}
+        {viewSize.width > 0 ? (
+          <Svg
+            width={viewSize.width}
+            height={viewSize.height}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          >
+            {/* Edges between discovered or adjacent nodes */}
+            {map.edges.map((e) => {
+              const a = map.nodes.find((n) => n.id === e.from)!;
+              const b = map.nodes.find((n) => n.id === e.to)!;
+              if (!a || !b) return null;
+              const anyDiscovered = a.discovered && b.discovered;
+              if (!anyDiscovered) return null;
+              const pa = toScreen(a.x, a.y);
+              const pb = toScreen(b.x, b.y);
+              const fromCurrent = a.id === currentId || b.id === currentId;
+              return (
+                <Line
+                  key={e.id}
+                  x1={pa.x}
+                  y1={pa.y}
+                  x2={pb.x}
+                  y2={pb.y}
+                  stroke={fromCurrent ? 'rgba(228,191,90,0.6)' : 'rgba(255,255,255,0.18)'}
+                  strokeWidth={fromCurrent ? 2 : 1.5}
+                  strokeDasharray={fromCurrent ? undefined : '4 4'}
+                />
+              );
+            })}
+          </Svg>
+        ) : null}
+
+        {/* Node hotspots rendered as absolute Pressables overlaying the scene */}
+        {viewSize.width > 0
+          ? map.nodes.map((n) => {
+              const p = toScreen(n.x, n.y);
+              const isCurrent = n.id === currentId;
+              const canTravel = adjIds.has(n.id) && n.discovered;
+              const isFogged = !n.discovered && !(n.content?.poiLandmark);
+              if (isFogged) return null;
+              // Landmark POIs glow through fog as silhouettes.
+              const isLandmarkFog = !n.discovered && n.content?.poiLandmark;
+              return (
+                <Pressable
+                  key={n.id}
+                  onPress={() => onNodeTap(n)}
+                  style={[
+                    styles.nodeHotspot,
+                    {
+                      left: p.x - 24,
+                      top: p.y - 24,
+                      opacity: isLandmarkFog ? 0.55 : 1,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.nodeRing,
+                      {
+                        borderColor: isCurrent
+                          ? colors.accentBright
+                          : canTravel
+                            ? colors.accent
+                            : 'rgba(255,255,255,0.18)',
+                        backgroundColor:
+                          n.type === 'empty' || n.visited
+                            ? 'rgba(10,10,15,0.55)'
+                            : TYPE_COLOR[n.type].startsWith('#')
+                              ? `${TYPE_COLOR[n.type]}22`
+                              : 'rgba(10,10,15,0.55)',
+                      },
+                      Platform.OS === 'web' && canTravel
+                        ? ({ boxShadow: '0 0 0 2px rgba(228,191,90,0.2), 0 4px 14px rgba(0,0,0,0.5)' } as any)
+                        : null,
+                      Platform.OS === 'web' && n.content?.poiLandmark
+                        ? ({ boxShadow: '0 0 24px rgba(255,216,121,0.35)' } as any)
+                        : null,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.nodeGlyph,
+                        { color: isLandmarkFog ? 'rgba(228,191,90,0.7)' : TYPE_COLOR[n.type] },
+                      ]}
+                    >
+                      {n.content?.poiIcon ?? TYPE_GLYPH[n.type]}
+                    </Text>
+                  </View>
+                  {n.content?.poiName && n.discovered ? (
+                    <Text style={styles.nodeLabel} numberOfLines={1}>
+                      {n.content.poiName}
+                    </Text>
+                  ) : null}
+                  {n.scouted && !n.visited ? <View style={styles.scoutedDot} /> : null}
+                </Pressable>
+              );
+            })
+          : null}
+
+        {/* Hero sprite — a glowing circle with a knight silhouette */}
+        {heroReady ? (
+          <Animated.View style={[styles.heroSprite, heroStyle]}>
+            <Svg width={28} height={52} viewBox="0 0 28 52">
+              <G>
+                <Circle cx={14} cy={48} r={10} fill="rgba(228,191,90,0.25)" />
+                <Path
+                  d="M8,18 Q 14,12 20,18 L 20,32 Q 14,34 8,32 Z"
+                  fill="#0a0613"
+                  stroke="#e4bf5a"
+                  strokeWidth={1.2}
+                />
+                <Path d="M12,4 L 16,4 L 16,16 L 12,16 Z" fill="#e4bf5a" />
+                <Path d="M6,28 Q 14,32 22,28 L 24,46 L 4,46 Z" fill="#0a0613" stroke="#c69a42" strokeWidth={1.2} />
+              </G>
+            </Svg>
+          </Animated.View>
+        ) : null}
+      </View>
+
+      {/* Intel & controls */}
+      <ScrollView style={styles.footer} contentContainerStyle={{ paddingBottom: spacing.lg }}>
+        {inspected && inspected.discovered ? (
+          <View style={[styles.intelCard, glass.card]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Text style={[styles.nodeGlyphInline, { color: TYPE_COLOR[inspected.type] }]}>
+                {inspected.content?.poiIcon ?? TYPE_GLYPH[inspected.type]}
+              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[typography.label, { color: colors.textMuted }]}>
+                  {inspected.id === currentId ? 'ЗДЕСЬ' : 'ОСМОТР'}
+                </Text>
+                <Text style={[typography.h3, { color: colors.text }]}>
+                  {inspected.content?.poiName ?? inspected.label ?? TYPE_LABEL[inspected.type]}
+                </Text>
+              </View>
+            </View>
+            {inspected.content?.poiFlavor && (inspected.scouted || inspected.visited) ? (
+              <Text
+                style={[typography.caption, { color: colors.textMuted, fontStyle: 'italic', marginTop: spacing.sm }]}
+              >
+                {inspected.content.poiFlavor}
+              </Text>
+            ) : null}
+            {inspected.scouted && !inspected.visited ? (
+              <View style={{ marginTop: spacing.xs }}>
+                {inspected.content?.enemyTemplateIds ? (
+                  <Text style={[typography.caption, { color: colors.danger }]}>
+                    ⚔{' '}
+                    {inspected.content.enemyTemplateIds
+                      .map((id) => {
+                        try {
+                          return getEnemyTemplate(id).name;
+                        } catch {
+                          return id;
+                        }
+                      })
+                      .join(', ')}
+                  </Text>
+                ) : null}
+                {inspected.content?.uniqueRewardTemplateId ? (
+                  <Text style={[typography.caption, { color: colors.accentBright, marginTop: 2 }]}>
+                    ✦ Особая награда: {safeItemName(inspected.content.uniqueRewardTemplateId)}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+            {!inspected.scouted && !inspected.visited ? (
+              <Text style={[typography.caption, { color: colors.textDim, marginTop: spacing.xs }]}>
+                Разведка откроет, что там.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        <View style={styles.controlsRow}>
+          <Button
+            label={`Разведать (−1 пров.)`}
+            variant="secondary"
+            disabled={run.provisions <= 0}
+            onPress={() => {
+              const r = scoutMapFromCurrent();
+              flashMessage(r.message);
+            }}
+            style={{ flex: 1 }}
+            compact
+          />
+          <Button
+            label="Отступить"
+            variant="danger"
+            onPress={flee}
+            style={{ flex: 1 }}
+            compact
+          />
+        </View>
+      </ScrollView>
+
+      {flash ? (
+        <Animated.View
+          entering={FadeIn.duration(150)}
+          exiting={FadeOut.duration(200)}
+          style={styles.flashBanner}
+        >
+          <Text style={[typography.caption, { color: colors.text }]}>{flash}</Text>
+        </Animated.View>
+      ) : null}
 
       {lore ? (
         <Pressable onPress={() => setLore(null)} style={styles.loreWrap}>
@@ -212,344 +433,137 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
             style={[styles.loreCard, glass.strong]}
           >
             <Text style={[typography.label, { color: colors.textMuted }]}>ПО ДОРОГЕ</Text>
-            <Text style={[typography.body, { color: colors.text, marginTop: spacing.xs, fontStyle: 'italic' }]}>
+            <Text
+              style={[
+                typography.body,
+                { color: colors.text, marginTop: spacing.xs, fontStyle: 'italic' },
+              ]}
+            >
               {lore}
             </Text>
-            <Text style={[typography.caption, { color: colors.textDim, marginTop: spacing.sm, textAlign: 'right' }]}>
+            <Text
+              style={[typography.caption, { color: colors.textDim, marginTop: spacing.sm, textAlign: 'right' }]}
+            >
               Нажми, чтобы закрыть
             </Text>
           </Animated.View>
         </Pressable>
       ) : null}
-
-      <View style={styles.gridWrap}>
-        {rows.map((row, y) => (
-          <View key={`row-${y}`} style={styles.row}>
-            {row.map((t) => (
-              <TileCell
-                key={t.id}
-                tile={t}
-                size={cellSize}
-                isCurrent={t.id === current?.id}
-                isAdjacent={adjacentIds.has(t.id)}
-                isHovered={hoveredTileId === t.id}
-                onPress={() => handleTilePress(t)}
-              />
-            ))}
-          </View>
-        ))}
-      </View>
-
-      {/* Intel panel for the currently-inspected / current tile */}
-      {(() => {
-        const inspectId = hoveredTileId ?? current?.id;
-        const t = inspectId ? grid.tiles.find((x) => x.id === inspectId) : undefined;
-        if (!t || !t.revealed) return null;
-        return (
-          <View style={[styles.intelCard, glass.card]}>
-            <View style={styles.intelHeader}>
-              <Text style={[typography.label, { color: colors.textMuted }]}>
-                {t.id === current?.id ? 'ТЕКУЩАЯ КЛЕТКА' : 'ОСМОТР'}
-              </Text>
-              <Text style={[typography.body, { color: colors.text, fontWeight: '700' }]}>
-                {t.content?.poiName ?? t.label ?? TYPE_LABEL[t.type]}
-              </Text>
-            </View>
-            {t.content?.poiFlavor && (t.scouted || t.explored) ? (
-              <Text style={[typography.caption, { color: colors.textMuted, fontStyle: 'italic', marginTop: 4 }]}>
-                {t.content.poiFlavor}
-              </Text>
-            ) : null}
-            {/* Scouted intel: show actual enemies/loot/reward */}
-            {t.scouted && !t.explored ? (
-              <View style={{ marginTop: spacing.xs }}>
-                {t.content?.enemyTemplateIds ? (
-                  <Text style={[typography.caption, { color: colors.danger }]}>
-                    ⚔ {t.content.enemyTemplateIds.map((id) => {
-                      try { return getEnemyTemplate(id).name; } catch { return id; }
-                    }).join(', ')}
-                  </Text>
-                ) : null}
-                {t.content?.uniqueRewardTemplateId ? (
-                  <Text style={[typography.caption, { color: colors.accentBright, marginTop: 2 }]}>
-                    ✦ Особая награда: {safeItemName(t.content.uniqueRewardTemplateId)}
-                  </Text>
-                ) : null}
-                {t.content?.lootTableId && !t.content?.uniqueRewardTemplateId ? (
-                  <Text style={[typography.caption, { color: colors.accent, marginTop: 2 }]}>
-                    ✦ Сокровище
-                  </Text>
-                ) : null}
-                {t.content?.eventId ? (
-                  <Text style={[typography.caption, { color: colors.primary, marginTop: 2 }]}>
-                    ? Событие
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
-            {!t.scouted && !t.explored ? (
-              <Text style={[typography.caption, { color: colors.textDim, marginTop: spacing.xs }]}>
-                Разведка откроет содержимое.
-              </Text>
-            ) : null}
-          </View>
-        );
-      })()}
-
-      <View style={styles.legendRow}>
-        <Legend glyph="◉" color={colors.text} label="Здесь" />
-        <Legend glyph="·" color={colors.textMuted} label="Идти" />
-        <Legend glyph="?" color={colors.textDim} label="Туман" />
-      </View>
-
-      {flash ? (
-        <Animated.View
-          entering={FadeIn.duration(150)}
-          exiting={FadeOut.duration(200)}
-          style={styles.flash}
-        >
-          <Text style={[typography.caption, { color: colors.text }]}>{flash}</Text>
-        </Animated.View>
-      ) : null}
-
-      <View style={styles.controlsRow}>
-        <Button
-          label={`Разведать (−1 провизия, ост. ${run.provisions})`}
-          variant="secondary"
-          disabled={run.provisions <= 0}
-          onPress={() => {
-            const r = scoutFromCurrent();
-            flashMessage(r.message);
-          }}
-          style={{ flex: 1 }}
-          compact
-        />
-      </View>
-      <Button
-        label="Отступить (потеря рейдовой добычи)"
-        variant="danger"
-        onPress={flee}
-        style={{ marginTop: spacing.sm }}
-      />
     </Screen>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={[typography.label, { color: colors.textDim }]}>{label}</Text>
-      <Text style={[typography.h2, { color: colors.text }]}>{value}</Text>
-    </View>
-  );
-}
-
-function Legend({ glyph, color, label }: { glyph: string; color: string; label: string }) {
-  return (
-    <View style={styles.legendItem}>
-      <Text style={[typography.body, { color, fontWeight: '700' }]}>{glyph}</Text>
-      <Text style={[typography.caption, { color: colors.textMuted }]}>{label}</Text>
-    </View>
-  );
-}
-
-function TileCell({
-  tile,
-  size,
-  isCurrent,
-  isAdjacent,
-  isHovered,
-  onPress,
-}: {
-  tile: Tile;
-  size: number;
-  isCurrent: boolean;
-  isAdjacent: boolean;
-  isHovered: boolean;
-  onPress: () => void;
-}) {
-  const isFog = !tile.revealed;
-  const isImpassable = tile.type === 'impassable';
-  const isLandmark = !!tile.content?.poiLandmark;
-  const poiIcon = tile.content?.poiIcon;
-
-  // Even through fog, landmark POIs reveal as a dim silhouette — they pull
-  // the player toward them across the map.
-  const showLandmarkSilhouette = isFog && isLandmark;
-
-  const glyph = isFog
-    ? showLandmarkSilhouette
-      ? poiIcon ?? '◈'
-      : '?'
-    : isCurrent
-      ? '◉'
-      : poiIcon ?? TYPE_GLYPH[tile.type];
-  const color = isFog
-    ? showLandmarkSilhouette
-      ? 'rgba(228,191,90,0.45)'
-      : colors.textDim
-    : isCurrent
-      ? colors.text
-      : TYPE_COLOR[tile.type];
-  const gradient = isFog
-    ? showLandmarkSilhouette
-      ? (['rgba(228,191,90,0.08)', 'rgba(228,191,90,0.01)'] as const)
-      : (['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.005)'] as const)
-    : tile.explored && tile.type === 'empty'
-      ? (['rgba(255,255,255,0.025)', 'rgba(255,255,255,0.005)'] as const)
-      : TYPE_BG[tile.type];
-
-  const border = isCurrent
-    ? colors.accentBright
-    : isHovered
-      ? colors.accent
-      : isAdjacent && tile.revealed && !isImpassable
-        ? colors.primary
-        : showLandmarkSilhouette
-          ? 'rgba(228,191,90,0.35)'
-          : 'rgba(255,255,255,0.06)';
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.cell,
-        {
-          width: size,
-          height: size,
-          borderColor: border,
-          opacity: pressed ? 0.85 : 1,
-        },
-        Platform.OS === 'web' && isCurrent
-          ? ({ boxShadow: '0 0 0 2px rgba(255,216,121,0.35), 0 6px 18px rgba(0,0,0,0.4)' } as any)
-          : null,
-      ]}
-    >
-      <LinearGradient
-        colors={gradient as any}
-        style={StyleSheet.absoluteFillObject}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-      <Text style={[styles.glyph, { color, fontSize: size * 0.4 }]}>{glyph}</Text>
-      {/* Scouted details: subtle dot in corner so player knows they have intel. */}
-      {tile.scouted && !tile.explored ? (
-        <View style={styles.scoutedMark} />
-      ) : null}
-      {/* Explored empty tile: darker overlay */}
-      {tile.explored && tile.type === 'empty' && !isCurrent ? (
-        <View
-          style={[
-            StyleSheet.absoluteFillObject,
-            { backgroundColor: 'rgba(0,0,0,0.15)' },
-          ]}
-        />
-      ) : null}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  titleRow: {
+  topInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    padding: spacing.lg,
+    paddingBottom: spacing.sm,
+    gap: spacing.md,
   },
-  headerCard: {
-    padding: spacing.md,
-    borderRadius: radii.lg,
-    marginBottom: spacing.md,
+  instabilityWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  stat: {
+  stage: {
     flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  gridWrap: {
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  cell: {
-    borderRadius: radii.sm,
-    borderWidth: 1.5,
+    minHeight: 340,
+    maxHeight: 460,
     overflow: 'hidden',
+    backgroundColor: '#060510',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  nodeHotspot: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glyph: {
+  nodeRing: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nodeGlyph: {
+    fontSize: 18,
     fontWeight: '800',
+  },
+  nodeGlyphInline: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  nodeLabel: {
+    ...typography.caption,
+    color: colors.text,
+    backgroundColor: 'rgba(10,8,20,0.75)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    marginTop: 2,
+    fontSize: 10,
+    maxWidth: 120,
     textAlign: 'center',
   },
-  legendRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.lg,
-    marginTop: spacing.xs,
-    marginBottom: spacing.md,
+  scoutedDot: {
+    position: 'absolute',
+    top: 2,
+    right: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accentBright,
   },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  heroSprite: {
+    position: 'absolute',
+    width: 28,
+    height: 52,
+    pointerEvents: 'none',
   },
-  flash: {
-    padding: spacing.sm,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  footer: {
+    maxHeight: 260,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+  },
+  intelCard: {
+    padding: spacing.md,
+    borderRadius: radii.md,
     marginBottom: spacing.sm,
   },
   controlsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  flashBanner: {
+    position: 'absolute',
+    top: spacing.lg,
+    alignSelf: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: 'rgba(5,3,12,0.8)',
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    maxWidth: layout.maxContentWidth - spacing.xl * 2,
   },
   loreWrap: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+    inset: 0,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
+    backgroundColor: 'rgba(5,3,12,0.7)',
     zIndex: 50,
-    backgroundColor: 'rgba(5, 3, 12, 0.7)',
-  },
+  } as any,
   loreCard: {
     maxWidth: 420,
     padding: spacing.lg,
     borderRadius: radii.lg,
-  },
-  intelCard: {
-    padding: spacing.md,
-    borderRadius: radii.md,
-    marginVertical: spacing.sm,
-  },
-  intelHeader: {
-    flexDirection: 'column',
-    gap: 2,
-  },
-  scoutedMark: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.accentBright,
   },
 });
