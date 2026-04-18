@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
+import { UnitPortrait } from '../components/UnitPortrait';
 import { colors, radii, spacing, typography } from '../theme/colors';
 import { useGame } from '../state/store';
 import { getEnemyTemplate } from '../data/enemies';
@@ -24,6 +25,15 @@ const TICK_MS = 700;
 // Grid definition: each side has two rows (front/back) × 2 columns.
 const ROW_ORDER_ENEMY: FormationRow[] = ['back', 'front']; // far → near battle line
 const ROW_ORDER_ALLY: FormationRow[] = ['front', 'back']; // near → far
+
+function sigilFor(c: Combatant): string {
+  if (c.kind === 'hero') return 'hero';
+  if (c.kind === 'companion') {
+    // Heuristic: tank/damage stay front, support/control go back — match to tag.
+    return c.row === 'back' ? 'companion_support' : 'companion_tank';
+  }
+  return c.sourceTemplateId ?? 'hero';
+}
 
 function FormationGrid({
   combatants,
@@ -43,7 +53,7 @@ function FormationGrid({
 
   return (
     <View style={styles.formation}>
-      <Text style={[typography.caption, styles.sideLabel]}>{sideLabel}</Text>
+      <Text style={styles.sideLabel}>{sideLabel}</Text>
       {rowOrder.map((row) => (
         <View key={row} style={styles.formationRow}>
           {[0, 1].map((col) => {
@@ -89,39 +99,38 @@ function CombatSlot({
   useEffect(() => {
     if (wasHit) {
       hitShake.value = withSequence(
-        withTiming(-4, { duration: 50 }),
-        withTiming(4, { duration: 50 }),
         withTiming(-3, { duration: 50 }),
+        withTiming(3, { duration: 50 }),
+        withTiming(-2, { duration: 50 }),
         withTiming(0, { duration: 80 }),
       );
     }
   }, [wasHit, hitShake]);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: hitShake.value }, { scale: 1 + flash.value * 0.04 }],
-    borderColor:
-      flash.value > 0.3
-        ? colors.accent
-        : combatant.side === 'ally'
-          ? colors.ally
-          : colors.enemy,
+    transform: [{ translateX: hitShake.value }, { scale: 1 + flash.value * 0.03 }],
+    borderColor: flash.value > 0.3 ? colors.accentBright : colors.border,
   }));
 
   const dead = combatant.hp <= 0;
   const hpPct = combatant.hpMax > 0 ? combatant.hp / combatant.hpMax : 0;
-  const sidePortraitColor = combatant.side === 'ally' ? colors.ally : colors.enemy;
-  const initial = combatant.name[0] ?? '?';
 
   return (
-    <Animated.View style={[styles.slot, { opacity: dead ? 0.25 : 1 }, animStyle]}>
-      <View style={[styles.portrait, { backgroundColor: sidePortraitColor }]}>
-        <Text style={styles.portraitInitial}>{initial}</Text>
-      </View>
-      <View style={{ flex: 1, marginLeft: spacing.xs }}>
-        <Text
-          numberOfLines={1}
-          style={[typography.caption, { color: colors.text, fontWeight: '600' }]}
-        >
+    <Animated.View
+      style={[
+        styles.slot,
+        { backgroundColor: combatant.side === 'ally' ? '#24200f' : '#231812' },
+        animStyle,
+      ]}
+    >
+      <UnitPortrait
+        sigil={sigilFor(combatant)}
+        side={combatant.side}
+        size={38}
+        dim={dead}
+      />
+      <View style={{ flex: 1, marginLeft: spacing.sm, opacity: dead ? 0.4 : 1 }}>
+        <Text numberOfLines={1} style={styles.slotName}>
           {combatant.name}
         </Text>
         <View style={styles.hpTrack}>
@@ -135,10 +144,16 @@ function CombatSlot({
             ]}
           />
         </View>
-        <Text style={styles.hpText}>
-          {combatant.hp}/{combatant.hpMax}
-          {combatant.attackRange === 'ranged' ? ' · ⇫' : ''}
-        </Text>
+        <View style={styles.slotMetaRow}>
+          <Text style={styles.hpText}>
+            {combatant.hp}/{combatant.hpMax}
+          </Text>
+          {combatant.attackRange === 'ranged' ? (
+            <Text style={styles.rangeTag}>⇫</Text>
+          ) : (
+            <Text style={styles.rangeTagMelee}>⚔</Text>
+          )}
+        </View>
         {combatant.statuses.length > 0 ? (
           <Text style={styles.statuses}>
             {combatant.statuses.map((s) => s.type[0]).join('')}
@@ -153,30 +168,30 @@ function formatLog(entry: CombatLogEntry, combatants: Combatant[]): string {
   const nameOf = (id?: string) => (id ? combatants.find((c) => c.id === id)?.name ?? id : '');
   switch (entry.kind) {
     case 'start':
-      return 'Бой начинается.';
+      return '⚔ Бой начинается.';
     case 'action':
-      if (entry.verb === 'skip') return `${nameOf(entry.actor)} пропускает ход.`;
+      if (entry.verb === 'skip') return `· ${nameOf(entry.actor)} пропускает ход.`;
       if (entry.verb === 'attack')
-        return `${nameOf(entry.actor)} → ${nameOf(entry.target)} (-${entry.amount}).`;
+        return `${nameOf(entry.actor)} → ${nameOf(entry.target)}  −${entry.amount}`;
       if (entry.verb === 'crit')
-        return `${nameOf(entry.actor)} КРИТ → ${nameOf(entry.target)} (-${entry.amount})!`;
+        return `★ ${nameOf(entry.actor)} → ${nameOf(entry.target)}  −${entry.amount}`;
       if (entry.verb === 'zir_damage')
-        return `Зир: ${nameOf(entry.actor)} → ${nameOf(entry.target)} (-${entry.amount}).`;
+        return `✧ Зир · ${nameOf(entry.actor)} → ${nameOf(entry.target)}  −${entry.amount}`;
       if (entry.verb === 'zir_heal')
-        return `Зир: ${nameOf(entry.actor)} лечит ${nameOf(entry.target)} (+${entry.amount}).`;
+        return `✚ Зир · ${nameOf(entry.actor)} лечит ${nameOf(entry.target)}  +${entry.amount}`;
       if (entry.verb.startsWith('status_'))
-        return `${nameOf(entry.actor)}: ${entry.verb.slice(7)} (-${entry.amount}).`;
+        return `· ${nameOf(entry.actor)}: ${entry.verb.slice(7)} −${entry.amount}`;
       return `${nameOf(entry.actor)} действует.`;
     case 'status':
-      return `${nameOf(entry.target)} получает ${entry.status}.`;
+      return `${nameOf(entry.target)} — ${entry.status}.`;
     case 'downed':
-      return `${nameOf(entry.combatant)} падает!`;
+      return `☠ ${nameOf(entry.combatant)} пал.`;
     case 'end':
       return entry.outcome === 'victory'
-        ? 'Победа.'
+        ? '✦ Победа.'
         : entry.outcome === 'defeat'
-          ? 'Поражение.'
-          : 'Отступление.';
+          ? '✖ Поражение.'
+          : '⇥ Отступление.';
   }
 }
 
@@ -205,7 +220,10 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
       enemies,
       tactic: 'balanced',
     });
-    return { initial: s, seed: (run?.seed ?? 1) ^ nodeId.charCodeAt(Math.max(nodeId.length - 1, 0)) };
+    return {
+      initial: s,
+      seed: (run?.seed ?? 1) ^ nodeId.charCodeAt(Math.max(nodeId.length - 1, 0)),
+    };
   }, [node, hero, inventory, companion, run?.seed, nodeId]);
 
   const [state, setState] = useState<CombatState | null>(initial);
@@ -219,7 +237,6 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
       setState((prev) => {
         if (!prev) return prev;
         const next = stepCombat(prev, rngRef.current);
-        // Derive the most recent hit target from the new log entries.
         for (let i = next.log.length - 1; i >= 0 && i >= next.log.length - 3; i--) {
           const entry = next.log[i];
           if (entry && entry.kind === 'action' && entry.target && entry.amount) {
@@ -271,31 +288,36 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
   return (
     <Screen>
       <View style={styles.header}>
-        <Text style={typography.h3}>{node.label}</Text>
+        <Text style={typography.h3} numberOfLines={1}>
+          {node.label}
+        </Text>
         <Text style={[typography.caption, { color: colors.textMuted }]}>Ход {state.turn}</Text>
       </View>
 
-      <FormationGrid
-        combatants={enemies}
-        rowOrder={ROW_ORDER_ENEMY}
-        activeId={activeId}
-        lastHitId={lastHitId}
-        sideLabel="ВРАГИ"
-      />
+      {/* Battlefield: two formations on a themed stage. */}
+      <View style={styles.battlefield}>
+        <FormationGrid
+          combatants={enemies}
+          rowOrder={ROW_ORDER_ENEMY}
+          activeId={activeId}
+          lastHitId={lastHitId}
+          sideLabel="ПРОТИВНИК"
+        />
 
-      <View style={styles.battleLine}>
-        <View style={styles.battleBar} />
-        <Text style={styles.battleLabel}>⚔</Text>
-        <View style={styles.battleBar} />
+        <View style={styles.battleLine}>
+          <View style={styles.battleBar} />
+          <Text style={styles.battleLabel}>⚔</Text>
+          <View style={styles.battleBar} />
+        </View>
+
+        <FormationGrid
+          combatants={allies}
+          rowOrder={ROW_ORDER_ALLY}
+          activeId={activeId}
+          lastHitId={lastHitId}
+          sideLabel="ВАШ ОТРЯД"
+        />
       </View>
-
-      <FormationGrid
-        combatants={allies}
-        rowOrder={ROW_ORDER_ALLY}
-        activeId={activeId}
-        lastHitId={lastHitId}
-        sideLabel="НАШИ"
-      />
 
       <View style={styles.logBox}>
         <ScrollView
@@ -341,18 +363,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
+  battlefield: {
+    backgroundColor: colors.bgDeep,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   formation: {
     marginVertical: spacing.xs,
   },
   sideLabel: {
+    ...typography.caption,
     color: colors.textMuted,
-    letterSpacing: 2,
+    letterSpacing: 3,
     marginBottom: spacing.xs,
     textAlign: 'center',
   },
   formationRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.xs,
     marginBottom: spacing.xs,
   },
   slot: {
@@ -361,43 +392,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xs,
     paddingHorizontal: spacing.sm,
-    minHeight: 58,
-    borderWidth: 2,
-    borderRadius: radii.md,
-    backgroundColor: colors.bgCard,
+    minHeight: 60,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
   },
   slotEmpty: {
     borderStyle: 'dashed',
-    borderColor: colors.border,
+    borderColor: colors.borderLight,
+    opacity: 0.35,
     backgroundColor: 'transparent',
   },
-  portrait: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  portraitInitial: {
-    color: '#0f0e13',
+  slotName: {
+    ...typography.caption,
+    color: colors.text,
     fontWeight: '700',
-    fontSize: 16,
+  },
+  slotMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
   },
   hpTrack: {
     height: 6,
     marginTop: 3,
-    backgroundColor: colors.bgElevated,
+    backgroundColor: colors.bgDeep,
     borderRadius: 3,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
-  hpFill: {
-    height: 6,
-    borderRadius: 3,
-  },
+  hpFill: { height: 4 },
   hpText: {
     color: colors.textMuted,
     fontSize: 10,
-    marginTop: 1,
+  },
+  rangeTag: {
+    color: colors.light,
+    fontSize: 10,
+  },
+  rangeTagMelee: {
+    color: colors.accentDark,
+    fontSize: 10,
   },
   statuses: {
     color: colors.warn,
@@ -413,19 +450,19 @@ const styles = StyleSheet.create({
   battleBar: {
     flex: 1,
     height: 1,
-    backgroundColor: colors.accentDark,
+    backgroundColor: colors.borderGold,
   },
   battleLabel: {
-    color: colors.accent,
-    fontSize: 18,
+    color: colors.accentBright,
+    fontSize: 20,
+    fontFamily: typography.h3.fontFamily,
   },
   logBox: {
     flex: 1,
-    marginTop: spacing.sm,
-    minHeight: 100,
-    maxHeight: 180,
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.md,
+    minHeight: 90,
+    maxHeight: 160,
+    backgroundColor: colors.bgDeep,
+    borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: colors.border,
   },

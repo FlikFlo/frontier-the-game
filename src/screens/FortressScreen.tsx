@@ -3,7 +3,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Button } from '../components/Button';
 import { Bar } from '../components/Bar';
+import { Panel } from '../components/Panel';
 import { Screen } from '../components/Screen';
+import { UnitPortrait } from '../components/UnitPortrait';
 import { colors, radii, spacing, typography } from '../theme/colors';
 import { useGame } from '../state/store';
 import { EXPEDITION_TEMPLATES } from '../data/expeditions';
@@ -28,6 +30,7 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
   const crystals = useGame((s) => s.crystals);
   const inventory = useGame((s) => s.inventory);
   const inventoryCapacity = useGame((s) => s.inventoryCapacity);
+  const gold = useGame((s) => s.gold);
   const startExpedition = useGame((s) => s.startExpedition);
   const checkExpeditionCost = useGame((s) => s.checkExpeditionCost);
   const lastResult = useGame((s) => s.lastResult);
@@ -57,7 +60,7 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
         </View>
 
         {lastResult ? (
-          <View style={[styles.resultBanner, lastResult.outcome === 'victory' ? styles.bannerOk : styles.bannerBad]}>
+          <Panel variant={lastResult.outcome === 'victory' ? 'success' : 'danger'}>
             <Text style={[typography.body, { color: colors.text }]}>
               {lastResult.outcome === 'victory'
                 ? `Вылазка успешна. Принесено предметов: ${lastResult.collectedCount}`
@@ -65,112 +68,117 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
                   ? 'Герой побеждён. Рейдовый лут потерян.'
                   : 'Отступление. Часть добычи потеряна.'}
             </Text>
-          </View>
+          </Panel>
         ) : null}
 
         {pendingLevelUps.length > 0 ? (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(200)}
-            style={[styles.resultBanner, styles.bannerLevel]}
-          >
-            <Text style={[typography.body, { color: colors.accent }]}>
-              Уровень! {pendingLevelUps[0]!.fromLevel} → {pendingLevelUps[pendingLevelUps.length - 1]!.toLevel}
-            </Text>
-            <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
-              +{pendingLevelUps.reduce((s, l) => s + l.hpGained, 0)} HP · +
-              {pendingLevelUps.reduce((s, l) => s + l.epGained, 0)} EP ·{' '}
-              {(() => {
-                const sums: Record<string, number> = {};
-                for (const l of pendingLevelUps) {
-                  for (const [k, v] of Object.entries(l.statsGained)) {
-                    sums[k] = (sums[k] ?? 0) + (v ?? 0);
+          <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)}>
+            <Panel
+              variant="gold"
+              title={`Повышение · ${pendingLevelUps[0]!.fromLevel} → ${pendingLevelUps[pendingLevelUps.length - 1]!.toLevel}`}
+            >
+              <Text style={[typography.caption, { color: colors.text, marginBottom: spacing.sm }]}>
+                +{pendingLevelUps.reduce((s, l) => s + l.hpGained, 0)} HP · +
+                {pendingLevelUps.reduce((s, l) => s + l.epGained, 0)} EP ·{' '}
+                {(() => {
+                  const sums: Record<string, number> = {};
+                  for (const l of pendingLevelUps) {
+                    for (const [k, v] of Object.entries(l.statsGained)) {
+                      sums[k] = (sums[k] ?? 0) + (v ?? 0);
+                    }
                   }
-                }
-                return Object.entries(sums)
-                  .map(([k, v]) => `+${v} ${k}`)
-                  .join(', ');
-              })()}
-            </Text>
-            <View style={{ height: spacing.sm }} />
-            <Button label="Отлично" onPress={clearLevelUps} />
+                  return Object.entries(sums)
+                    .map(([k, v]) => `+${v} ${k}`)
+                    .join(', ');
+                })()}
+              </Text>
+              <Button label="Отлично" onPress={clearLevelUps} />
+            </Panel>
           </Animated.View>
         ) : null}
 
         {/* Hero card */}
-        <View style={styles.card}>
-          <View style={styles.rowBetween}>
-            <Text style={typography.h3}>{hero.name}</Text>
-            <Text style={[typography.caption, { color: colors.textMuted }]}>Ур. {hero.level}</Text>
+        <Panel title={hero.name} badge={`УРОВЕНЬ ${hero.level}`}>
+          <View style={styles.heroRow}>
+            <UnitPortrait sigil="hero" side="ally" size={64} />
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <Bar value={hero.hpMax} max={hero.hpMax} color={colors.hp} label="Здоровье" />
+              <View style={{ height: spacing.xs }} />
+              <Bar value={hero.epMax} max={hero.epMax} color={colors.ep} label="Энергия" />
+              <View style={{ height: spacing.xs }} />
+              <Bar value={hero.xp} max={xpToNext(hero.level)} color={colors.accent} label="Опыт" />
+            </View>
           </View>
-          <View style={{ height: spacing.sm }} />
-          <Bar value={hero.hpMax} max={hero.hpMax} color={colors.hp} label="HP" />
-          <View style={{ height: spacing.xs }} />
-          <Bar value={hero.epMax} max={hero.epMax} color={colors.ep} label="EP" />
-          <View style={{ height: spacing.xs }} />
-          <Bar value={hero.xp} max={xpToNext(hero.level)} color={colors.accent} label="XP" />
           <View style={{ height: spacing.sm }} />
           <Text style={[typography.caption, { color: colors.textMuted }]}>
             Атака {hero.stats.attack} · Магия {hero.stats.magic} · Защита {hero.stats.defense} · Скорость {hero.stats.speed}
           </Text>
-        </View>
+        </Panel>
 
         {/* Companion card */}
         {companion ? (
-          <View style={styles.card}>
-            <View style={styles.rowBetween}>
-              <Text style={typography.h3}>{companion.name}</Text>
-              <Text style={[typography.caption, { color: colors.textMuted }]}>
-                Компаньон · {companion.role}
-              </Text>
+          <Panel title={companion.name} badge={companion.role.toUpperCase()}>
+            <View style={styles.heroRow}>
+              <UnitPortrait sigil={`companion_${companion.role}`} side="ally" size={56} />
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Bar value={companion.hpMax} max={companion.hpMax} color={colors.hp} label="Здоровье" />
+              </View>
             </View>
-            <View style={{ height: spacing.sm }} />
-            <Bar value={companion.hpMax} max={companion.hpMax} color={colors.hp} label="HP" />
-          </View>
+          </Panel>
         ) : null}
 
         {/* Stockpile */}
-        <View style={styles.card}>
-          <Text style={typography.h3}>Склад</Text>
-          <View style={{ height: spacing.sm }} />
-          <Text style={[typography.body, { color: colors.text }]}>
-            Вирдит (зелёный кристалл): {crystals.virdite ?? 0}
-          </Text>
-          <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.xs }]}>
+        <Panel title="Склад">
+          <View style={styles.stockRow}>
+            <Text style={[typography.body, { color: colors.accentBright }]}>☼ {gold}</Text>
+            <Text style={[typography.body, { color: colors.earth }]}>
+              ◆ Вирдит: {crystals.virdite ?? 0}
+            </Text>
+          </View>
+          <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
             Инвентарь: {inventoryFill}/{inventoryCapacity}
           </Text>
-        </View>
+        </Panel>
 
         {/* Expeditions */}
-        <View style={styles.card}>
-          <Text style={typography.h3}>Вылазки</Text>
-          <View style={{ height: spacing.md }} />
-          {Object.values(EXPEDITION_TEMPLATES).map((tpl) => {
+        <Panel title="Вылазки">
+          {Object.values(EXPEDITION_TEMPLATES).map((tpl, idx, arr) => {
             const costEntries = Object.entries(tpl.crystalCost).filter(
               ([, v]) => (v ?? 0) > 0,
             ) as [CrystalKind, number][];
             const check = checkExpeditionCost(tpl.id);
             const affordable = check.ok;
+            const isLast = idx === arr.length - 1;
             return (
               <View
                 key={tpl.id}
                 style={[
                   styles.expedition,
-                  tpl.portal && { borderColor: colors.earth, backgroundColor: '#141c14' },
+                  tpl.portal && styles.expeditionPortal,
+                  !isLast && { marginBottom: spacing.md },
                 ]}
               >
                 <View style={styles.rowBetween}>
-                  <Text style={[typography.body, { color: colors.text }]}>{tpl.name}</Text>
+                  <Text
+                    style={[
+                      typography.h3,
+                      { color: tpl.portal ? colors.earth : colors.text, flex: 1 },
+                    ]}
+                  >
+                    {tpl.name}
+                  </Text>
                   {tpl.portal ? (
-                    <Text style={[typography.caption, { color: colors.earth }]}>⌬ Портал</Text>
+                    <Text style={[typography.caption, { color: colors.earth, letterSpacing: 1 }]}>
+                      ⌬ ПОРТАЛ
+                    </Text>
                   ) : null}
                 </View>
                 {tpl.description ? (
-                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
                     {tpl.description}
                   </Text>
                 ) : null}
-                <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>
+                <Text style={[typography.caption, { color: colors.textDim, marginTop: spacing.sm }]}>
                   Дней в пути: {tpl.travelDays} · Рекоменд. сила: {tpl.recommendedPower}
                 </Text>
                 {costEntries.length > 0 ? (
@@ -209,17 +217,16 @@ export function FortressScreen({ navigation }: ScreenProps<'Fortress'>) {
               </Text>
             </Animated.View>
           ) : null}
-        </View>
+        </Panel>
 
-        {/* Inventory & Crafting */}
         <Button
           label="Инвентарь и Зиры"
           variant="secondary"
           onPress={() => navigation.navigate('Inventory')}
-          style={{ marginTop: spacing.md }}
+          style={{ marginTop: spacing.xs }}
         />
         <Button
-          label="Мастерская (алхимия и Зиры)"
+          label="Мастерская"
           variant="secondary"
           onPress={() => navigation.navigate('Crafting')}
           style={{ marginTop: spacing.sm }}
@@ -237,29 +244,24 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  card: {
-    backgroundColor: colors.bgCard,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
+  stockRow: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    alignItems: 'center',
   },
-  resultBanner: {
-    borderRadius: radii.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    marginBottom: spacing.md,
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  bannerOk: { backgroundColor: '#1d2d1d', borderColor: colors.success },
-  bannerBad: { backgroundColor: '#2d1d1d', borderColor: colors.danger },
-  bannerLevel: { backgroundColor: '#2a2418', borderColor: colors.accent },
   expedition: {
-    marginBottom: spacing.md,
     padding: spacing.md,
-    borderRadius: radii.md,
+    borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.bgElevated,
+    backgroundColor: colors.bgDeep,
+  },
+  expeditionPortal: {
+    borderColor: colors.earth,
+    backgroundColor: '#13180f',
   },
 });

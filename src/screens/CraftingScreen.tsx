@@ -72,10 +72,13 @@ export function CraftingScreen({ navigation }: ScreenProps<'Crafting'>) {
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
         <Button label="← Назад" variant="secondary" onPress={() => navigation.goBack()} />
-        <Text style={[typography.h2, { marginLeft: spacing.md, color: colors.text }]}>
+        <Text style={[typography.h2, { marginLeft: spacing.md, color: colors.text, flex: 1 }]}>
           Мастерская
         </Text>
       </View>
+      <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.md }]}>
+        Комбинируй материалы и кристаллы в зелья и Зиры. Тап по рецепту — развернуть.
+      </Text>
 
       {flash ? (
         <Animated.View
@@ -83,7 +86,10 @@ export function CraftingScreen({ navigation }: ScreenProps<'Crafting'>) {
           exiting={FadeOut.duration(200)}
           style={[
             styles.flash,
-            { backgroundColor: flash.ok ? '#1d2d1d' : '#2d1d1d', borderColor: flash.ok ? colors.success : colors.danger },
+            {
+              backgroundColor: flash.ok ? '#182214' : '#24110c',
+              borderColor: flash.ok ? colors.success : colors.danger,
+            },
           ]}
         >
           <Text style={[typography.body, { color: colors.text }]}>{flash.text}</Text>
@@ -93,8 +99,8 @@ export function CraftingScreen({ navigation }: ScreenProps<'Crafting'>) {
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
         {Array.from(byStation.entries()).map(([station, list]) => (
           <View key={station} style={{ marginBottom: spacing.lg }}>
-            <Text style={[typography.h3, { color: colors.accent, marginBottom: spacing.sm }]}>
-              {STATION_LABEL[station]}
+            <Text style={[typography.h3, { color: colors.accentBright, marginBottom: spacing.sm, letterSpacing: 1 }]}>
+              ❖ {STATION_LABEL[station]}
             </Text>
             {list.map((recipe) => {
               const check = checkCraft(recipe.id);

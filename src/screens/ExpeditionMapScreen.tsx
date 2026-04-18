@@ -11,7 +11,7 @@ import type { ExpeditionNode, NodeType } from '../types/domain';
 import type { ScreenProps } from '../navigation/types';
 
 const NODE_ICON: Record<NodeType, string> = {
-  start: '●',
+  start: '⚑',
   combat: '⚔',
   elite: '☠',
   boss: '♛',
@@ -29,7 +29,7 @@ const NODE_COLOR: Record<NodeType, string> = {
   treasure: colors.accent,
   event: colors.air,
   rest: colors.success,
-  extraction: colors.hero,
+  extraction: colors.accentBright,
 };
 
 function NodeRow({
@@ -50,16 +50,47 @@ function NodeRow({
   const state = current ? 'current' : visited ? 'visited' : nextAvailable ? 'available' : 'future';
 
   return (
-    <View style={[styles.nodeRow, state === 'current' && styles.nodeCurrent]}>
-      <View style={[styles.nodeIcon, { borderColor: color, backgroundColor: state === 'future' ? colors.bg : colors.bgCard }]}>
-        <Text style={{ color, fontSize: 22, fontWeight: '700' }}>{icon}</Text>
+    <View
+      style={[
+        styles.nodeRow,
+        state === 'current' && styles.nodeCurrent,
+        state === 'future' && styles.nodeFuture,
+        state === 'available' && styles.nodeAvailable,
+      ]}
+    >
+      <View
+        style={[
+          styles.nodeIcon,
+          {
+            borderColor: color,
+            backgroundColor: state === 'future' ? colors.bgDeep : colors.bgCard,
+          },
+        ]}
+      >
+        <Text style={{ color, fontSize: 20, fontWeight: '700' }}>{icon}</Text>
       </View>
       <View style={{ flex: 1, marginLeft: spacing.md }}>
-        <Text style={[typography.body, { color: state === 'future' ? colors.textDim : colors.text }]}>
+        <Text
+          style={[
+            typography.body,
+            { color: state === 'future' ? colors.textDim : colors.text },
+          ]}
+        >
           {node.label}
         </Text>
-        <Text style={[typography.caption, { color: colors.textMuted }]}>
-          {state === 'current' ? 'Вы здесь' : state === 'visited' ? 'Пройдено' : state === 'available' ? 'Доступно' : 'Дальше'}
+        <Text
+          style={[
+            typography.caption,
+            { color: colors.textMuted, letterSpacing: 0.5, marginTop: 1 },
+          ]}
+        >
+          {state === 'current'
+            ? 'Вы здесь'
+            : state === 'visited'
+              ? 'Пройдено'
+              : state === 'available'
+                ? 'Доступно'
+                : 'Дальше'}
         </Text>
       </View>
       {state === 'available' && onPress ? <Button label="Идти" onPress={onPress} /> : null}
@@ -85,7 +116,7 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
   const template = getExpeditionTemplate(run.templateId);
   const available = new Set(nextNodeOptions(run).map((n) => n.id));
   const visited = new Set(run.visitedNodeIds);
-  const instabilityMax = run.nodes.length; // 1 per visited
+  const instabilityMax = run.nodes.length;
   const hasBranching = available.size > 1;
 
   const goTo = (node: ExpeditionNode) => {
@@ -104,21 +135,25 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
 
   return (
     <Screen>
-      <View style={{ marginBottom: spacing.md }}>
+      <View style={styles.titleRow}>
         <Text style={typography.h2}>{template.name}</Text>
-        <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
-          Собрано: {run.raidLoot.length} предм. · Посещено узлов: {run.visitedNodeIds.length}
+        <Text style={[typography.caption, { color: colors.textMuted }]}>
+          Узлов: {run.visitedNodeIds.length}
         </Text>
-        <View style={{ height: spacing.sm }} />
+      </View>
+      <View style={styles.infoBox}>
         <Bar
           value={run.portalInstability}
           max={instabilityMax}
           color={colors.warn}
           label="Нестабильность портала"
         />
+        <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
+          Собрано в рейде: {run.raidLoot.length} предм.
+        </Text>
         {hasBranching ? (
-          <Text style={[typography.caption, { color: colors.accent, marginTop: spacing.xs }]}>
-            Развилка: выбери путь.
+          <Text style={[typography.caption, { color: colors.accentBright, marginTop: spacing.xs }]}>
+            ⇉ Развилка: выбери путь.
           </Text>
         ) : null}
       </View>
@@ -144,24 +179,44 @@ export function ExpeditionMapScreen({ navigation }: ScreenProps<'ExpeditionMap'>
 }
 
 const styles = StyleSheet.create({
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: spacing.sm,
+  },
+  infoBox: {
+    padding: spacing.sm,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgCard,
+    marginBottom: spacing.md,
+  },
   nodeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    marginBottom: spacing.xs,
     backgroundColor: colors.bgCard,
-    borderRadius: radii.md,
+    borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: colors.border,
   },
   nodeCurrent: {
-    borderColor: colors.accent,
+    borderColor: colors.accentBright,
     backgroundColor: colors.bgElevated,
   },
+  nodeAvailable: {
+    borderColor: colors.borderLight,
+  },
+  nodeFuture: {
+    opacity: 0.6,
+  },
   nodeIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',

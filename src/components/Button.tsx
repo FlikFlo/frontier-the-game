@@ -14,10 +14,20 @@ type Props = {
 export function Button({ label, onPress, variant = 'primary', disabled, style, subtitle }: Props) {
   const palette =
     variant === 'primary'
-      ? { bg: colors.accent, fg: '#1a1a1a', border: colors.accentDark }
+      ? {
+          bg: colors.accent,
+          bgHighlight: colors.accentBright,
+          fg: '#2b1e08',
+          border: colors.borderGold,
+        }
       : variant === 'danger'
-        ? { bg: colors.danger, fg: '#fff', border: '#7a2a25' }
-        : { bg: colors.bgCard, fg: colors.text, border: colors.border };
+        ? { bg: colors.danger, bgHighlight: '#c2493b', fg: '#1d0606', border: '#6e1f17' }
+        : {
+            bg: colors.bgCard,
+            bgHighlight: colors.bgElevated,
+            fg: colors.text,
+            border: colors.border,
+          };
 
   return (
     <Pressable
@@ -26,17 +36,32 @@ export function Button({ label, onPress, variant = 'primary', disabled, style, s
       style={({ pressed }) => [
         styles.base,
         {
-          backgroundColor: palette.bg,
+          backgroundColor: pressed ? palette.bg : palette.bgHighlight,
           borderColor: palette.border,
-          opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
+          opacity: disabled ? 0.4 : 1,
         },
         style,
       ]}
     >
-      <View>
-        <Text style={[typography.button, { color: palette.fg, textAlign: 'center' }]}>{label}</Text>
+      <View
+        style={[
+          styles.inner,
+          {
+            backgroundColor: palette.bg,
+            borderColor: palette.border,
+          },
+        ]}
+      >
+        <Text style={[typography.button, { color: palette.fg, textAlign: 'center' }]}>
+          {label}
+        </Text>
         {subtitle ? (
-          <Text style={[typography.caption, { color: palette.fg, opacity: 0.75, textAlign: 'center', marginTop: 2 }]}>
+          <Text
+            style={[
+              typography.caption,
+              { color: palette.fg, opacity: 0.75, textAlign: 'center', marginTop: 2 },
+            ]}
+          >
             {subtitle}
           </Text>
         ) : null}
@@ -47,9 +72,15 @@ export function Button({ label, onPress, variant = 'primary', disabled, style, s
 
 const styles = StyleSheet.create({
   base: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    // outer rim gives the "cast metal" look — light top, tooled frame
+    padding: 2,
     borderRadius: radii.md,
+    borderWidth: 1,
+  },
+  inner: {
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.sm,
     borderWidth: 1,
   },
 });

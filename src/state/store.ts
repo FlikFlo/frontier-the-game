@@ -19,6 +19,7 @@ import { applyCraft, checkRecipe } from '../systems/crafting';
 import { getRecipe } from '../data/recipes';
 import type { CraftCheck } from '../types/crafting';
 import { applyXp, type LevelUp } from '../systems/leveling';
+import { canDismantle, dismantleOutput, sellValue } from '../systems/economy';
 
 // --------- Initial state helpers ---------
 
@@ -78,6 +79,7 @@ export type GameState = {
   inventory: ItemInstance[]; // fortress stash + equipped
   inventoryCapacity: number; // total size allowed
   crystals: CrystalStockpile;
+  gold: number;
   fortress: FortressProgress;
   currentRun: ExpeditionRun | null;
   lastResult: { outcome: 'victory' | 'defeat' | 'flee'; collectedCount: number } | null;
@@ -100,6 +102,8 @@ export type GameActions = {
   clearLevelUps: () => void;
   checkCraft: (recipeId: string) => CraftCheck;
   craftItem: (recipeId: string) => { ok: boolean; message: string };
+  sellItem: (instanceId: string) => { ok: boolean; message: string };
+  dismantleItem: (instanceId: string) => { ok: boolean; message: string };
 };
 
 // --------- Store ---------
@@ -114,6 +118,7 @@ export const useGame = create<GameState & GameActions>()(
       inventory: [],
       inventoryCapacity: 12,
       crystals: { virdite: 0 },
+      gold: 0,
       fortress: { portalRoomLevel: 1, infirmaryLevel: 1 },
       currentRun: null,
       lastResult: null,
@@ -133,6 +138,7 @@ export const useGame = create<GameState & GameActions>()(
           inventory: items,
           inventoryCapacity: 12,
           crystals: { virdite: 0 },
+          gold: 20,
           fortress: { portalRoomLevel: 1, infirmaryLevel: 1 },
           currentRun: null,
           lastResult: null,
@@ -267,6 +273,59 @@ export const useGame = create<GameState & GameActions>()(
       },
 
       clearLevelUps: () => set({ pendingLevelUps: [] }),
+
+      sellItem: (instanceId) => {
+        const s = get();
+        const inst = s.inventory.find((i) => i.item.id === instanceId);
+        if (!inst) return { ok: false, message: 'Предмет не найден.' };
+        if (inst.binding === 'soul')
+          return { ok: false, message: 'Душевное не продаётся.' };
+        // equipped check
+        if (
+          s.hero.equippedWeaponId === instanceId ||
+          s.hero.equippedArmorId === instanceId ||
+          s.hero.equippedZirIds.includes(instanceId)
+        ) {
+          return { ok: false, message: 'Снимите экипировку перед продажей.' };
+        }
+        const gold = sellValue(inst);
+        if (gold <= 0) return { ok: false, message: 'Этот предмет не покупают.' };
+        set({
+          inventory: s.inventory.filter((i) => i.item.id !== instanceId),
+          gold: s.gold + gold,
+        });
+        return { ok: true, message: `Продано: ${inst.item.name} за ${gold} золота.` };
+      },
+
+      dismantleItem: (instanceId) => {
+        const s = get();
+        const inst = s.inventory.find((i) => i.item.id === instanceId);
+        if (!inst) return { ok: false, message: 'Предмет не найден.' };
+        if (inst.binding === 'soul')
+          return { ok: false, message: 'Душевное не разбирается.' };
+        if (
+          s.hero.equippedWeaponId === instanceId ||
+          s.hero.equippedArmorId === instanceId ||
+          s.hero.equippedZirIds.includes(instanceId)
+        ) {
+          return { ok: false, message: 'Снимите экипировку перед разбором.' };
+        }
+        if (!canDismantle(inst))
+          return { ok: false, message: 'Нечего из него извлечь.' };
+        const parts = dismantleOutput(inst);
+        const partsSize = parts.reduce((sum, p) => sum + p.item.size, 0);
+        const invWithout = s.inventory.filter((i) => i.item.id !== instanceId);
+        const currentSize = invWithout.reduce((sum, p) => sum + p.item.size, 0);
+        if (currentSize + partsSize > s.inventoryCapacity) {
+          return {
+            ok: false,
+            message: `Склад не примет ${partsSize} размера, освободите место.`,
+          };
+        }
+        set({ inventory: [...invWithout, ...parts] });
+        const names = parts.map((p) => p.item.name).join(', ');
+        return { ok: true, message: `Разобрано: ${inst.item.name} → ${names}.` };
+      },
 
       checkCraft: (recipeId) => {
         const s = get();
