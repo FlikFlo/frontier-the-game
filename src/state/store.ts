@@ -322,7 +322,8 @@ export const useGame = create<GameState & GameActions>()(
         const s = get();
         const tpl = FORTRESS_ROOMS[roomId as keyof typeof FORTRESS_ROOMS];
         if (!tpl) return { ok: false, message: 'Комната не найдена.' };
-        const currentLevel = s.fortress.rooms[roomId] ?? 0;
+        const rooms = s.fortress?.rooms ?? {};
+        const currentLevel = rooms[roomId] ?? 0;
         if (currentLevel >= tpl.maxLevel) {
           return { ok: false, message: 'Максимальный уровень.' };
         }
@@ -354,7 +355,7 @@ export const useGame = create<GameState & GameActions>()(
             });
           }
         }
-        const newRooms = { ...s.fortress.rooms, [roomId]: currentLevel + 1 };
+        const newRooms = { ...rooms, [roomId]: currentLevel + 1 };
         const patch: Partial<GameState> = {
           gold: s.gold - cost.gold,
           inventory: inv,
@@ -450,8 +451,30 @@ export const useGame = create<GameState & GameActions>()(
     {
       name: 'frontier-save-v1',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
-      // Strip ephemeral fields from persistence if any are added later.
+      version: 2,
+      // Back-fill fields added after the initial save format so existing
+      // players from earlier builds don't crash on entry.
+      migrate: (persisted: unknown, _fromVersion: number) => {
+        const s: Record<string, unknown> = { ...(persisted as Record<string, unknown> ?? {}) };
+        const fortress = (s.fortress as { rooms?: Record<string, number> } | undefined) ?? {};
+        if (!fortress.rooms) {
+          s.fortress = {
+            rooms: {
+              portal_hall: 1,
+              infirmary: 1,
+              workshop: 1,
+              storage: 1,
+              forge: 0,
+              library: 0,
+            },
+          };
+        }
+        if (typeof s.gold !== 'number') s.gold = 0;
+        if (!Array.isArray(s.pendingLevelUps)) s.pendingLevelUps = [];
+        if (typeof s.inventoryCapacity !== 'number') s.inventoryCapacity = 12;
+        if (!s.crystals || typeof s.crystals !== 'object') s.crystals = { virdite: 0 };
+        return s as typeof s;
+      },
     },
   ),
 );

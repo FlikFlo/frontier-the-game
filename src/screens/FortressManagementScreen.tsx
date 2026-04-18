@@ -87,7 +87,7 @@ export function FortressManagementScreen({ navigation }: ScreenProps<'FortressMa
 
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
         {rooms.map((room) => {
-          const level = fortress.rooms[room.id] ?? 0;
+          const level = fortress?.rooms?.[room.id] ?? 0;
           const nextLevel = level + 1;
           const atMax = level >= room.maxLevel;
           const cost = atMax ? null : room.costForLevel(level);
