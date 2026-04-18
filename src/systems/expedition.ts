@@ -33,9 +33,15 @@ export function generateExpedition(
 ): ExpeditionRun {
   const rng = createRng(seed);
   const nodes: ExpeditionNode[] = [];
-  const edges: ExpeditionEdge[] = template.layout.edges.map((e) => ({ ...e }));
+  if (!template.layout) {
+    throw new Error(
+      `Template ${template.id} has no legacy layout — use generateExpeditionRun (tile grid) instead.`,
+    );
+  }
+  const layout = template.layout;
+  const edges: ExpeditionEdge[] = layout.edges.map((e) => ({ ...e }));
 
-  template.layout.nodes.forEach((layoutNode, i) => {
+  layout.nodes.forEach((layoutNode, i) => {
     const type = layoutNode.type;
     const label = layoutNode.label ?? DEFAULT_LABEL[type] ?? 'Узел';
     const node: ExpeditionNode = { id: layoutNode.id, type, label };
@@ -67,8 +73,9 @@ export function generateExpedition(
     seed,
     nodes,
     edges,
-    currentNodeId: template.layout.startNodeId,
-    visitedNodeIds: [template.layout.startNodeId],
+    currentNodeId: layout.startNodeId,
+    visitedNodeIds: [layout.startNodeId],
+    provisions: 5,
     raidLoot: [],
     portalInstability: 0,
     startedAt: 0,

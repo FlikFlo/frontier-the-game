@@ -20,7 +20,13 @@ import { rollLoot } from '../systems/items';
 import type { CombatState, Combatant, CombatLogEntry, FormationRow } from '../types/combat';
 import type { ScreenProps } from '../navigation/types';
 
-const TICK_MS = 700;
+// Combat pacing: each tick is one in-fiction action.  Slowed compared to the
+// MVP-1 number so blows actually land — fights should feel weighty, not like
+// a number-tickertape.  Pauses scale up on crits and on death so the camera
+// can "land" on the moment.
+const TICK_MS = 1500;
+const PAUSE_ON_DEATH_MS = 900;
+const PAUSE_ON_CRIT_MS = 500;
 
 // Grid definition: each side has two rows (front/back) × 2 columns.
 const ROW_ORDER_ENEMY: FormationRow[] = ['back', 'front']; // far → near battle line
@@ -40,12 +46,14 @@ function FormationGrid({
   rowOrder,
   activeId,
   lastHitId,
+  hitFx,
   sideLabel,
 }: {
   combatants: Combatant[];
   rowOrder: FormationRow[];
   activeId: string | undefined;
   lastHitId: string | undefined;
+  hitFx: HitFx | undefined;
   sideLabel: string;
 }) {
   const slotAt = (row: FormationRow, col: number) =>
@@ -64,6 +72,7 @@ function FormationGrid({
                 combatant={c}
                 isActor={activeId === c.id}
                 wasHit={lastHitId === c.id}
+                hitFx={lastHitId === c.id ? hitFx : undefined}
               />
             ) : (
               <View key={`${row}-${col}`} style={[styles.slot, styles.slotEmpty]} />
@@ -75,17 +84,24 @@ function FormationGrid({
   );
 }
 
+type HitFx = { amount: number; verb: 'attack' | 'crit' | 'zir_damage' | 'zir_heal' | string };
+
 function CombatSlot({
   combatant,
   isActor,
   wasHit,
+  hitFx,
 }: {
   combatant: Combatant;
   isActor: boolean;
   wasHit: boolean;
+  hitFx?: HitFx;
 }) {
   const flash = useSharedValue(0);
   const hitShake = useSharedValue(0);
+  const damageY = useSharedValue(0);
+  const damageOpacity = useSharedValue(0);
+  const damageScale = useSharedValue(1);
 
   useEffect(() => {
     if (isActor) {
@@ -99,21 +115,36 @@ function CombatSlot({
   useEffect(() => {
     if (wasHit) {
       hitShake.value = withSequence(
-        withTiming(-3, { duration: 50 }),
-        withTiming(3, { duration: 50 }),
-        withTiming(-2, { duration: 50 }),
-        withTiming(0, { duration: 80 }),
+        withTiming(-4, { duration: 60 }),
+        withTiming(4, { duration: 60 }),
+        withTiming(-3, { duration: 60 }),
+        withTiming(0, { duration: 100 }),
       );
+      // Floating number rises and fades.
+      damageY.value = 0;
+      damageOpacity.value = 1;
+      damageScale.value = hitFx?.verb === 'crit' ? 1.5 : 1;
+      damageY.value = withTiming(-50, { duration: 1100 });
+      damageOpacity.value = withTiming(0, { duration: 1100 });
     }
-  }, [wasHit, hitShake]);
+  }, [wasHit, damageY, damageOpacity, damageScale, hitShake, hitFx?.verb]);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: hitShake.value }, { scale: 1 + flash.value * 0.03 }],
+    transform: [{ translateX: hitShake.value }, { scale: 1 + flash.value * 0.04 }],
     borderColor: flash.value > 0.3 ? colors.accentBright : colors.border,
+  }));
+
+  const damageStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: damageY.value }, { scale: damageScale.value }],
+    opacity: damageOpacity.value,
   }));
 
   const dead = combatant.hp <= 0;
   const hpPct = combatant.hpMax > 0 ? combatant.hp / combatant.hpMax : 0;
+  const isHeal = hitFx?.verb === 'zir_heal';
+  const isCrit = hitFx?.verb === 'crit';
+  const damageColor = isHeal ? colors.success : isCrit ? colors.accentBright : colors.danger;
+  const damagePrefix = isHeal ? '+' : '−';
 
   return (
     <Animated.View
@@ -160,6 +191,16 @@ function CombatSlot({
           </Text>
         ) : null}
       </View>
+      {hitFx && hitFx.amount ? (
+        <Animated.Text
+          pointerEvents="none"
+          style={[styles.damageNumber, { color: damageColor }, damageStyle]}
+        >
+          {damagePrefix}
+          {hitFx.amount}
+          {isCrit ? '!' : ''}
+        </Animated.Text>
+      ) : null}
     </Animated.View>
   );
 }
@@ -205,14 +246,21 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
   const stashRaidLoot = useGame((s) => s.stashRaidLoot);
   const extractRunFailed = useGame((s) => s.extractRunFailed);
   const awardXp = useGame((s) => s.awardXp);
+  const clearTileContent = useGame((s) => s.clearTileContent);
 
+  // Resolve combat content: prefer tile (new), fall back to legacy node.
+  const tileEnemyIds: string[] | undefined = run?.grid
+    ? run.grid.tiles.find((t) => t.id === nodeId)?.content?.enemyTemplateIds
+    : undefined;
+  const tileLabel = run?.grid?.tiles.find((t) => t.id === nodeId)?.label;
   const node = run?.nodes.find((n) => n.id === nodeId);
+  const enemyIds: string[] | undefined = tileEnemyIds ?? node?.combat?.enemyTemplateIds;
 
   const { initial, seed } = useMemo(() => {
-    if (!node || !node.combat) {
+    if (!enemyIds || enemyIds.length === 0) {
       return { initial: null as CombatState | null, seed: 0 };
     }
-    const enemies = node.combat.enemyTemplateIds.map((id) => getEnemyTemplate(id));
+    const enemies = enemyIds.map((id) => getEnemyTemplate(id));
     const s = buildCombat({
       hero,
       heroInventory: inventory,
@@ -224,15 +272,23 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
       initial: s,
       seed: (run?.seed ?? 1) ^ nodeId.charCodeAt(Math.max(nodeId.length - 1, 0)),
     };
-  }, [node, hero, inventory, companion, run?.seed, nodeId]);
+  }, [enemyIds, hero, inventory, companion, run?.seed, nodeId]);
 
   const [state, setState] = useState<CombatState | null>(initial);
   const [speed, setSpeed] = useState(1);
   const rngRef = useRef(createRng(seed));
   const [lastHitId, setLastHitId] = useState<string | undefined>(undefined);
+  const [hitFx, setHitFx] = useState<HitFx | undefined>(undefined);
 
   useEffect(() => {
     if (!state || state.outcome !== 'ongoing') return;
+    // Compute extra pause based on the *previous* tick's events so the
+    // camera lingers after a crit or a kill.
+    const recent = state.log.slice(-4);
+    const wasCrit = recent.some((e) => e.kind === 'action' && e.verb === 'crit');
+    const wasDeath = recent.some((e) => e.kind === 'downed');
+    const extra = wasDeath ? PAUSE_ON_DEATH_MS : wasCrit ? PAUSE_ON_CRIT_MS : 0;
+
     const t = setTimeout(() => {
       setState((prev) => {
         if (!prev) return prev;
@@ -241,16 +297,17 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
           const entry = next.log[i];
           if (entry && entry.kind === 'action' && entry.target && entry.amount) {
             setLastHitId(entry.target);
+            setHitFx({ amount: entry.amount, verb: entry.verb });
             break;
           }
         }
         return next;
       });
-    }, TICK_MS / speed);
+    }, (TICK_MS + extra) / speed);
     return () => clearTimeout(t);
   }, [state, speed]);
 
-  if (!node || !state) {
+  if (!enemyIds || !state) {
     return (
       <Screen>
         <Text style={{ color: colors.text }}>Бой недоступен.</Text>
@@ -267,16 +324,18 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
   const activeId = alivePriority[0]?.id;
 
   const onVictory = () => {
-    if (!node.combat || !run) return;
+    if (!enemyIds || !run) return;
     let xp = 0;
-    const rng = createRng(run.seed ^ node.id.charCodeAt(0) ^ 0xbeef);
-    const loot = node.combat.enemyTemplateIds.flatMap((id) => {
+    const rng = createRng(run.seed ^ nodeId.charCodeAt(0) ^ 0xbeef);
+    const loot = enemyIds.flatMap((id) => {
       const tpl = getEnemyTemplate(id);
       xp += tpl.xpReward;
       return tpl.lootTableId ? rollLoot(tpl.lootTableId, rng, 'raid') : [];
     });
     awardXp(xp);
     if (loot.length > 0) stashRaidLoot(loot);
+    // Mark the tile as cleared so re-entering doesn't re-trigger the fight.
+    if (run.grid) clearTileContent(nodeId);
     navigation.replace('ExpeditionMap');
   };
 
@@ -289,7 +348,7 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
     <Screen>
       <View style={styles.header}>
         <Text style={typography.h3} numberOfLines={1}>
-          {node.label}
+          {tileLabel ?? node?.label ?? 'Бой'}
         </Text>
         <Text style={[typography.caption, { color: colors.textMuted }]}>Ход {state.turn}</Text>
       </View>
@@ -301,6 +360,7 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
           rowOrder={ROW_ORDER_ENEMY}
           activeId={activeId}
           lastHitId={lastHitId}
+          hitFx={hitFx}
           sideLabel="ПРОТИВНИК"
         />
 
@@ -315,6 +375,7 @@ export function CombatScreen({ navigation, route }: ScreenProps<'Combat'>) {
           rowOrder={ROW_ORDER_ALLY}
           activeId={activeId}
           lastHitId={lastHitId}
+          hitFx={hitFx}
           sideLabel="ВАШ ОТРЯД"
         />
       </View>
@@ -476,5 +537,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  damageNumber: {
+    position: 'absolute',
+    top: 4,
+    right: 8,
+    fontSize: 22,
+    fontWeight: '900',
+    fontFamily: typography.h1.fontFamily,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowRadius: 3,
+    textShadowOffset: { width: 0, height: 2 },
+    pointerEvents: 'none',
   },
 });

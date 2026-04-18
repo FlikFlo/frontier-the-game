@@ -15,8 +15,47 @@ export function NodeResolveScreen({ navigation, route }: ScreenProps<'NodeResolv
   const run = useGame((s) => s.currentRun);
   const stashRaidLoot = useGame((s) => s.stashRaidLoot);
   const extractRunSucceeded = useGame((s) => s.extractRunSucceeded);
+  const clearTileContent = useGame((s) => s.clearTileContent);
 
-  const node = run?.nodes.find((n) => n.id === nodeId);
+  // Resolve to either a legacy node or a grid tile.
+  const tile = run?.grid?.tiles.find((t) => t.id === nodeId);
+  const legacyNode = run?.nodes.find((n) => n.id === nodeId);
+
+  type ResolvedNode = {
+    type: 'treasure' | 'event' | 'extraction' | 'rest' | 'cartographer' | 'start';
+    label: string;
+    treasure?: { lootTableId: string };
+    event?: { eventId: string };
+  };
+
+  const node: ResolvedNode | undefined = tile
+    ? {
+        type:
+          tile.type === 'treasure' ||
+          tile.type === 'event' ||
+          tile.type === 'extraction' ||
+          tile.type === 'rest' ||
+          tile.type === 'cartographer'
+            ? tile.type
+            : 'start',
+        label: tile.label ?? tile.type,
+        treasure:
+          tile.type === 'treasure' && tile.content?.lootTableId
+            ? { lootTableId: tile.content.lootTableId }
+            : undefined,
+        event:
+          tile.type === 'event' && tile.content?.eventId
+            ? { eventId: tile.content.eventId }
+            : undefined,
+      }
+    : legacyNode
+      ? ({
+          type: legacyNode.type as ResolvedNode['type'],
+          label: legacyNode.label,
+          treasure: legacyNode.treasure,
+          event: legacyNode.event,
+        } as ResolvedNode)
+      : undefined;
 
   const [resolved, setResolved] = useState(false);
   const [resultMsg, setResultMsg] = useState<string>('');
@@ -37,6 +76,7 @@ export function NodeResolveScreen({ navigation, route }: ScreenProps<'NodeResolv
 
   const goBackToMap = () => {
     if (resultLoot.length > 0) stashRaidLoot(resultLoot);
+    if (tile) clearTileContent(nodeId);
     navigation.replace('ExpeditionMap');
   };
 

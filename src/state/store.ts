@@ -22,6 +22,14 @@ import { applyXp, type LevelUp } from '../systems/leveling';
 import { canDismantle, dismantleOutput, sellValue } from '../systems/economy';
 import { FORTRESS_ROOMS } from '../data/fortressRooms';
 import { countByTemplate } from '../systems/crafting';
+import {
+  generateExpeditionRun,
+  markExplored,
+  revealAround,
+  setTileType,
+  tileAt,
+  walkableNeighbors,
+} from '../systems/tileExpedition';
 
 // --------- Initial state helpers ---------
 
@@ -97,7 +105,12 @@ export type GameActions = {
     templateId: string,
   ) => { ok: true } | { ok: false; missing: Partial<Record<CrystalKind, number>> };
   advanceToNode: (nodeId: string) => void;
-  stashRaidLoot: (items: ItemInstance[]) => void; // add to current run's pouch
+  // Tile-grid actions
+  moveToTile: (tileId: string) => { ok: boolean; message: string };
+  scoutFromCurrent: () => { ok: boolean; message: string };
+  triggerCartographer: (tileId: string) => void;
+  clearTileContent: (tileId: string) => void;
+  stashRaidLoot: (items: ItemInstance[]) => void;
   extractRunSucceeded: () => void;
   extractRunFailed: (outcome: 'defeat' | 'flee') => void;
   awardXp: (amount: number) => void;
@@ -220,9 +233,89 @@ export const useGame = create<GameState & GameActions>()(
           crystals[kind] = have - need;
         }
 
-        const run = generateExpedition(tpl, randomSeed());
+        const run = tpl.grid
+          ? generateExpeditionRun(tpl, randomSeed())
+          : generateExpedition(tpl, randomSeed());
         set({ currentRun: run, lastResult: null, crystals });
         return { ok: true, message: tpl.portal ? 'Портал стабилизирован.' : 'В путь.' };
+      },
+
+      moveToTile: (tileId) => {
+        const s = get();
+        if (!s.currentRun || !s.currentRun.grid || !s.currentRun.currentTileId) {
+          return { ok: false, message: 'Нет активной вылазки.' };
+        }
+        const grid = s.currentRun.grid;
+        const current = tileAt(grid, s.currentRun.currentTileId);
+        if (!current) return { ok: false, message: 'Текущая клетка не найдена.' };
+        const target = tileAt(grid, tileId);
+        if (!target) return { ok: false, message: 'Клетка не найдена.' };
+        if (target.type === 'impassable') {
+          return { ok: false, message: 'Сюда не пройти.' };
+        }
+        const isAdjacent = walkableNeighbors(grid, current).some((n) => n.id === tileId);
+        if (!isAdjacent) return { ok: false, message: 'Слишком далеко — только в соседнюю.' };
+        if (!target.revealed) return { ok: false, message: 'Клетка ещё в тумане.' };
+
+        // Move: mark explored, reveal LOS, bump instability.
+        let nextGrid = markExplored(grid, target.id);
+        nextGrid = revealAround(nextGrid, target, 1);
+        set({
+          currentRun: {
+            ...s.currentRun,
+            grid: nextGrid,
+            currentTileId: target.id,
+            portalInstability: s.currentRun.portalInstability + 1,
+          },
+        });
+        return { ok: true, message: '' };
+      },
+
+      scoutFromCurrent: () => {
+        const s = get();
+        if (!s.currentRun || !s.currentRun.grid || !s.currentRun.currentTileId) {
+          return { ok: false, message: 'Нет активной вылазки.' };
+        }
+        if (s.currentRun.provisions <= 0) {
+          return { ok: false, message: 'Не хватает провизии для разведки.' };
+        }
+        const grid = s.currentRun.grid;
+        const current = tileAt(grid, s.currentRun.currentTileId);
+        if (!current) return { ok: false, message: 'Клетка не найдена.' };
+        // Reveal radius 2 from current — see two steps in any direction.
+        const nextGrid = revealAround(grid, current, 2);
+        set({
+          currentRun: {
+            ...s.currentRun,
+            grid: nextGrid,
+            provisions: s.currentRun.provisions - 1,
+          },
+        });
+        return { ok: true, message: 'Разведано. Провизия −1.' };
+      },
+
+      triggerCartographer: (tileId) => {
+        const s = get();
+        if (!s.currentRun || !s.currentRun.grid) return;
+        const tile = tileAt(s.currentRun.grid, tileId);
+        if (!tile) return;
+        const radius = tile.content?.cartographerRadius ?? 3;
+        const nextGrid = revealAround(s.currentRun.grid, tile, radius);
+        set({
+          currentRun: {
+            ...s.currentRun,
+            grid: nextGrid,
+          },
+        });
+      },
+
+      clearTileContent: (tileId) => {
+        const s = get();
+        if (!s.currentRun || !s.currentRun.grid) return;
+        const nextGrid = setTileType(s.currentRun.grid, tileId, 'empty');
+        set({
+          currentRun: { ...s.currentRun, grid: nextGrid },
+        });
       },
 
       advanceToNode: (nodeId) => {

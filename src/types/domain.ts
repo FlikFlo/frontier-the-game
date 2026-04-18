@@ -184,6 +184,66 @@ export type ExpeditionLayout = {
   startNodeId: string;
 };
 
+// ----- Tile-based exploration (MVP-3) -----
+// Each expedition is a small grid you reveal one step at a time.
+// Replaces the linear node DAG; the old layout type stays for templates
+// that haven't been migrated yet.
+
+export type TileType =
+  | 'empty'
+  | 'combat'
+  | 'elite'
+  | 'boss'
+  | 'treasure'
+  | 'event'
+  | 'rest'
+  | 'extraction'
+  | 'cartographer'
+  | 'portal'        // entry tile, always start
+  | 'impassable';
+
+export type TileContent = {
+  enemyTemplateIds?: string[];
+  lootTableId?: string;
+  eventId?: string;
+  // Cartographer reveals tiles within `radius` of the cartographer's tile.
+  cartographerRadius?: number;
+};
+
+export type Tile = {
+  id: string;
+  x: number;
+  y: number;
+  type: TileType;
+  label?: string;
+  content?: TileContent;
+  // Player has line-of-sight: knows the tile type but hasn't entered.
+  revealed: boolean;
+  // Player has been on this tile and resolved its content (if any).
+  explored: boolean;
+};
+
+export type TileGrid = {
+  width: number;
+  height: number;
+  tiles: Tile[];
+  startId: string;
+};
+
+export type GridConfig = {
+  width: number;
+  height: number;
+  // Approximate counts — generator scatters them across the grid.
+  combat: number;
+  elite: number;
+  treasure: number;
+  event: number;
+  rest: number;
+  cartographer: number;
+  extractions: number; // multiple exit tiles
+  impassableRatio: number; // 0..1
+};
+
 export type ExpeditionTemplate = {
   id: string;
   name: string;
@@ -192,32 +252,34 @@ export type ExpeditionTemplate = {
   crystalCost: Partial<Record<CrystalKind, number>>;
   recommendedPower: number;
   description?: string;
-  // Explicit graph of the expedition. Supports branching and multiple
-  // extraction points — the core of the extraction loop.
-  layout: ExpeditionLayout;
-  // Enemy template IDs for combat nodes; boss is separate.
+  // Legacy linear/branch layout — kept for backwards compat during migration.
+  layout?: ExpeditionLayout;
+  // New tile-based config.
+  grid?: GridConfig;
   combatPool: string[];
   bossTemplateId: string;
-  // Loot tables by node type.
   chestLootTableId: string;
-  // Event IDs to choose from for event nodes.
   eventIds?: string[];
-  // If true, this expedition is a portal world (uses portal room and crystals).
   portal: boolean;
 };
 
 export type ExpeditionRun = {
   templateId: string;
   seed: number;
+  // Legacy: linear/branching node graph. Empty when grid is used.
   nodes: ExpeditionNode[];
   edges: ExpeditionEdge[];
   currentNodeId: string;
   visitedNodeIds: string[];
-  // loot picked up during the run (raid-bound) — lost on failure.
+  // New: tile-based exploration grid (preferred path).
+  grid?: TileGrid;
+  currentTileId?: string;
+  // Provisions: spent to scout. Refilled before each expedition.
+  provisions: number;
   raidLoot: ItemInstance[];
-  // heat/instability — rises with each visited node, drives extraction pressure.
+  // heat/instability — rises with each visited tile, drives extraction pressure.
   portalInstability: number;
-  startedAt: number; // game-day timestamp
+  startedAt: number;
 };
 
 // ---------- Enemies ----------
