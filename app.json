@@ -28,6 +28,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "experiments": {
+      "baseUrl": "/frontier-the-game"
+    },
     "extra": {
       "eas": {
         "projectId": "__PLACEHOLDER_REPLACE_ME__"
