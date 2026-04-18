@@ -245,7 +245,5 @@ export type CrystalStockpile = Partial<Record<CrystalKind, number>>;
 export type GameDay = number; // simple counter
 
 export type FortressProgress = {
-  // simple placeholders for MVP; real fortress management in MVP-2
-  portalRoomLevel: number;
-  infirmaryLevel: number;
+  rooms: Partial<Record<string, number>>; // FortressRoomId → level
 };

@@ -1,8 +1,8 @@
 import React, { type PropsWithChildren } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import { colors, radii, spacing, typography } from '../theme/colors';
+import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { colors, glass, radii, spacing, typography } from '../theme/colors';
 
-type Variant = 'default' | 'gold' | 'danger' | 'success';
+type Variant = 'default' | 'gold' | 'primary' | 'danger' | 'success';
 
 type Props = PropsWithChildren<{
   title?: string;
@@ -10,67 +10,103 @@ type Props = PropsWithChildren<{
   variant?: Variant;
   style?: ViewStyle;
   bodyStyle?: ViewStyle;
+  accentStripe?: boolean;
 }>;
 
-// Double-framed panel — outer carved-oak rim, inner parchment with a thin
-// gold rule. The outline carries most of the medieval feel without needing
-// textures or images.
-export function Panel({ title, badge, variant = 'default', style, bodyStyle, children }: Props) {
-  const palette = paletteFor(variant);
+export function Panel({
+  title,
+  badge,
+  variant = 'default',
+  style,
+  bodyStyle,
+  accentStripe,
+  children,
+}: Props) {
+  const accent = accentFor(variant);
+  const glassStyle = variant === 'default' ? glass.card : glass.strong;
+
   return (
-    <View style={[styles.outer, { borderColor: palette.outer }, style]}>
-      <View style={[styles.inner, { borderColor: palette.inner, backgroundColor: palette.bg }, bodyStyle]}>
-        {(title || badge) && (
+    <View style={[styles.outer, glassStyle, style]}>
+      {accentStripe !== false && accent.stripe ? (
+        <View
+          style={[
+            styles.stripe,
+            { backgroundColor: accent.stripe, borderColor: accent.stripe },
+          ]}
+        />
+      ) : null}
+      <View style={[styles.inner, bodyStyle]}>
+        {title || badge ? (
           <View style={styles.headerRow}>
             {title ? (
-              <Text style={[typography.h3, { color: palette.title, flex: 1 }]}>{title}</Text>
-            ) : <View style={{ flex: 1 }} />}
+              <Text style={[typography.h2, { color: colors.text, flex: 1 }]}>{title}</Text>
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
             {badge ? (
-              <Text style={[typography.caption, { color: palette.title, letterSpacing: 1 }]}>
+              <Text
+                style={[
+                  typography.label,
+                  { color: accent.badge, backgroundColor: accent.badgeBg },
+                  styles.badge,
+                ]}
+              >
                 {badge}
               </Text>
             ) : null}
           </View>
-        )}
+        ) : null}
         {children}
       </View>
     </View>
   );
 }
 
-function paletteFor(variant: Variant): {
-  outer: string;
-  inner: string;
-  bg: string;
-  title: string;
+function accentFor(variant: Variant): {
+  stripe: string | null;
+  badge: string;
+  badgeBg: string;
 } {
   switch (variant) {
     case 'gold':
-      return { outer: colors.accentDark, inner: colors.accent, bg: '#2a2114', title: colors.accentBright };
+      return { stripe: colors.accent, badge: colors.accentBright, badgeBg: colors.accentSoft };
+    case 'primary':
+      return { stripe: colors.primary, badge: colors.primaryBright, badgeBg: colors.primarySoft };
     case 'danger':
-      return { outer: '#4a1a12', inner: colors.danger, bg: '#24110c', title: '#e0a398' };
+      return { stripe: colors.danger, badge: colors.danger, badgeBg: colors.dangerSoft };
     case 'success':
-      return { outer: '#2a4520', inner: colors.success, bg: '#182214', title: '#bcd89c' };
+      return { stripe: colors.success, badge: colors.success, badgeBg: colors.successSoft };
     default:
-      return { outer: colors.border, inner: colors.borderLight, bg: colors.bgCard, title: colors.text };
+      return { stripe: null, badge: colors.textMuted, badgeBg: 'rgba(255,255,255,0.05)' };
   }
 }
 
 const styles = StyleSheet.create({
   outer: {
-    padding: 2,
-    borderRadius: radii.md,
-    borderWidth: 1,
+    borderRadius: radii.lg,
     marginBottom: spacing.md,
+    overflow: 'hidden',
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 8px 24px rgba(0,0,0,0.35)' } as any)
+      : { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 6 }),
+  },
+  stripe: {
+    height: 2,
+    width: '100%',
   },
   inner: {
     padding: spacing.lg,
-    borderRadius: radii.sm,
-    borderWidth: 1,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radii.sm,
+    overflow: 'hidden',
   },
 });

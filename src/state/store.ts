@@ -20,6 +20,8 @@ import { getRecipe } from '../data/recipes';
 import type { CraftCheck } from '../types/crafting';
 import { applyXp, type LevelUp } from '../systems/leveling';
 import { canDismantle, dismantleOutput, sellValue } from '../systems/economy';
+import { FORTRESS_ROOMS } from '../data/fortressRooms';
+import { countByTemplate } from '../systems/crafting';
 
 // --------- Initial state helpers ---------
 
@@ -104,6 +106,7 @@ export type GameActions = {
   craftItem: (recipeId: string) => { ok: boolean; message: string };
   sellItem: (instanceId: string) => { ok: boolean; message: string };
   dismantleItem: (instanceId: string) => { ok: boolean; message: string };
+  upgradeRoom: (roomId: string) => { ok: boolean; message: string };
 };
 
 // --------- Store ---------
@@ -119,7 +122,16 @@ export const useGame = create<GameState & GameActions>()(
       inventoryCapacity: 12,
       crystals: { virdite: 0 },
       gold: 0,
-      fortress: { portalRoomLevel: 1, infirmaryLevel: 1 },
+      fortress: {
+        rooms: {
+          portal_hall: 1,
+          infirmary: 1,
+          workshop: 1,
+          storage: 1,
+          forge: 0,
+          library: 0,
+        },
+      },
       currentRun: null,
       lastResult: null,
       pendingLevelUps: [],
@@ -139,7 +151,16 @@ export const useGame = create<GameState & GameActions>()(
           inventoryCapacity: 12,
           crystals: { virdite: 0 },
           gold: 20,
-          fortress: { portalRoomLevel: 1, infirmaryLevel: 1 },
+          fortress: {
+            rooms: {
+              portal_hall: 1,
+              infirmary: 1,
+              workshop: 1,
+              storage: 1,
+              forge: 0,
+              library: 0,
+            },
+          },
           currentRun: null,
           lastResult: null,
           pendingLevelUps: [],
@@ -295,6 +316,61 @@ export const useGame = create<GameState & GameActions>()(
           gold: s.gold + gold,
         });
         return { ok: true, message: `Продано: ${inst.item.name} за ${gold} золота.` };
+      },
+
+      upgradeRoom: (roomId) => {
+        const s = get();
+        const tpl = FORTRESS_ROOMS[roomId as keyof typeof FORTRESS_ROOMS];
+        if (!tpl) return { ok: false, message: 'Комната не найдена.' };
+        const currentLevel = s.fortress.rooms[roomId] ?? 0;
+        if (currentLevel >= tpl.maxLevel) {
+          return { ok: false, message: 'Максимальный уровень.' };
+        }
+        const cost = tpl.costForLevel(currentLevel);
+        if (s.gold < cost.gold) {
+          return { ok: false, message: `Не хватает золота (надо ${cost.gold}).` };
+        }
+        // Check materials (from non-equipped, non-soul? For simplicity: any instance of that template counts)
+        const counts = countByTemplate(s.inventory);
+        if (cost.materials) {
+          for (const [tplId, need] of Object.entries(cost.materials)) {
+            if ((counts[tplId] ?? 0) < need) {
+              return { ok: false, message: `Не хватает: ${tplId} (${counts[tplId] ?? 0}/${need}).` };
+            }
+          }
+        }
+        // Consume materials
+        let inv = [...s.inventory];
+        if (cost.materials) {
+          for (const [tplId, need] of Object.entries(cost.materials)) {
+            let remaining = need;
+            inv = inv.filter((inst) => {
+              if (remaining <= 0) return true;
+              if (inst.item.templateId === tplId) {
+                remaining -= 1;
+                return false;
+              }
+              return true;
+            });
+          }
+        }
+        const newRooms = { ...s.fortress.rooms, [roomId]: currentLevel + 1 };
+        const patch: Partial<GameState> = {
+          gold: s.gold - cost.gold,
+          inventory: inv,
+          fortress: { ...s.fortress, rooms: newRooms },
+        };
+        // Apply derived effects
+        if (roomId === 'storage') {
+          patch.inventoryCapacity = 12 + currentLevel * 4; // level 1 → 12, 2 → 16, ...
+        }
+        if (roomId === 'infirmary' && s.companion) {
+          // Small max-HP bump for companion at each level
+          const hpBonus = Math.round(s.companion.hpMax * 0.08);
+          patch.companion = { ...s.companion, hpMax: s.companion.hpMax + hpBonus };
+        }
+        set(patch);
+        return { ok: true, message: `${tpl.name} улучшен до уровня ${currentLevel + 1}.` };
       },
 
       dismantleItem: (instanceId) => {

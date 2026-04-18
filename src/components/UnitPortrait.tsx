@@ -1,11 +1,25 @@
 import React from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  BeetleArt,
+  GolemArt,
+  HeroArt,
+  MageArt,
+  MazeHeartArt,
+  MinerArt,
+  RangerArt,
+  RatArt,
+  SlabArt,
+  SpiderArt,
+  StoneGuardArt,
+  type CreatureArtProps,
+} from '../art/creatures';
 import { colors, radii } from '../theme/colors';
 
 type Side = 'ally' | 'enemy';
 
 type Props = {
-  // A template id (hero_main, mine_rat, ...) or a role tag; drives icon + tint.
   sigil: string;
   side: Side;
   size?: number;
@@ -13,88 +27,162 @@ type Props = {
   style?: ViewStyle;
 };
 
-// Simple unicode sigils by template/role. Kept in one place so we can swap
-// for real portraits later without touching layout.
-const SIGIL: Record<string, string> = {
-  // heroes / allies
-  hero: '♞',
-  companion_tank: '♜',
-  companion_damage: '♘',
-  companion_support: '☥',
-  companion_control: '☽',
-  // mine
-  mine_rat: '☠',
-  stone_beetle: '⚙',
-  rogue_miner: '⚒',
-  ore_elemental: '✦',
-  ancient_golem: '☗',
-  // emerald reach
-  stone_guard: '♜',
-  crystal_spider: '✷',
-  wandering_slab: '▣',
-  maze_heart: '❖',
+type ArtSpec = {
+  Art: React.FC<CreatureArtProps>;
+  gradient: readonly [string, string];
+  color: string;
+  accent: string;
 };
 
-// Background tint per unit family — gives each enemy a flavorful frame without art.
-const TINT: Record<string, string> = {
-  hero: '#3a2b18',
-  companion_tank: '#2a2816',
-  mine_rat: '#2b1d14',
-  stone_beetle: '#222019',
-  rogue_miner: '#2a1e10',
-  ore_elemental: '#1e2514',
-  ancient_golem: '#221914',
-  stone_guard: '#1e2414',
-  crystal_spider: '#18241c',
-  wandering_slab: '#1f2218',
-  maze_heart: '#201a2a',
+const ART: Record<string, ArtSpec> = {
+  hero: {
+    Art: HeroArt,
+    gradient: ['#3d2a5e', '#0f0821'],
+    color: '#120923',
+    accent: '#ffd879',
+  },
+  companion_tank: {
+    Art: RangerArt,
+    gradient: ['#3b2a1a', '#0f0a05'],
+    color: '#140c05',
+    accent: '#e4bf5a',
+  },
+  companion_damage: {
+    Art: RangerArt,
+    gradient: ['#4b1a2a', '#0f0506'],
+    color: '#140505',
+    accent: '#fb7185',
+  },
+  companion_support: {
+    Art: MageArt,
+    gradient: ['#1e3a5f', '#06101a'],
+    color: '#0a1020',
+    accent: '#a7d7ff',
+  },
+  companion_control: {
+    Art: MageArt,
+    gradient: ['#402a5e', '#0e0622'],
+    color: '#0e0622',
+    accent: '#c4b4ff',
+  },
+  mine_rat: {
+    Art: RatArt,
+    gradient: ['#3a2515', '#120904'],
+    color: '#120904',
+    accent: '#c88b4a',
+  },
+  stone_beetle: {
+    Art: BeetleArt,
+    gradient: ['#32281a', '#0d0806'],
+    color: '#0d0806',
+    accent: '#d1b383',
+  },
+  rogue_miner: {
+    Art: MinerArt,
+    gradient: ['#3c2617', '#110804'],
+    color: '#110804',
+    accent: '#d69940',
+  },
+  ore_elemental: {
+    Art: MageArt,
+    gradient: ['#263f1a', '#050f04'],
+    color: '#080f05',
+    accent: '#a7f059',
+  },
+  ancient_golem: {
+    Art: GolemArt,
+    gradient: ['#3a2e1a', '#0b0804'],
+    color: '#100a05',
+    accent: '#d69940',
+  },
+  stone_guard: {
+    Art: StoneGuardArt,
+    gradient: ['#243018', '#060a04'],
+    color: '#081008',
+    accent: '#a7d88a',
+  },
+  crystal_spider: {
+    Art: SpiderArt,
+    gradient: ['#154034', '#04120d'],
+    color: '#04120d',
+    accent: '#5eead4',
+  },
+  wandering_slab: {
+    Art: SlabArt,
+    gradient: ['#2a2d24', '#0a0a06'],
+    color: '#0a0a06',
+    accent: '#e0e7ef',
+  },
+  maze_heart: {
+    Art: MazeHeartArt,
+    gradient: ['#163a30', '#040f0a'],
+    color: '#040f0a',
+    accent: '#a7f3d0',
+  },
 };
 
-export function UnitPortrait({ sigil, side, size = 44, dim, style }: Props) {
-  const symbol = SIGIL[sigil] ?? (side === 'ally' ? '♟' : '♦');
-  const tint = TINT[sigil] ?? (side === 'ally' ? '#2a2114' : '#2a1912');
-  const frameColor = side === 'ally' ? colors.borderGold : '#6e3a30';
-  const innerBorder = side === 'ally' ? colors.accent : colors.enemy;
-  const glyphColor = side === 'ally' ? colors.accentBright : '#e0a398';
+const FALLBACK_ALLY: ArtSpec = {
+  Art: HeroArt,
+  gradient: ['#3d2a5e', '#0f0821'],
+  color: '#120923',
+  accent: '#ffd879',
+};
+const FALLBACK_ENEMY: ArtSpec = {
+  Art: BeetleArt,
+  gradient: ['#3a2020', '#100505'],
+  color: '#100505',
+  accent: '#fb7185',
+};
 
+export function UnitPortrait({ sigil, side, size = 56, dim, style }: Props) {
+  const spec = ART[sigil] ?? (side === 'ally' ? FALLBACK_ALLY : FALLBACK_ENEMY);
+  const frameColor = side === 'ally' ? colors.accent : colors.enemy;
   return (
     <View
       style={[
-        styles.outer,
-        { width: size, height: size, borderColor: frameColor, opacity: dim ? 0.3 : 1 },
+        styles.frame,
+        {
+          width: size,
+          height: size,
+          borderColor: frameColor,
+          opacity: dim ? 0.35 : 1,
+        },
         style,
       ]}
     >
-      <View
-        style={[
-          styles.inner,
-          {
-            backgroundColor: tint,
-            borderColor: innerBorder,
-          },
-        ]}
-      >
-        <Text style={[styles.glyph, { color: glyphColor, fontSize: size * 0.55 }]}>{symbol}</Text>
+      <LinearGradient
+        colors={spec.gradient as any}
+        style={StyleSheet.absoluteFillObject}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+      />
+      <View style={styles.inner}>
+        <spec.Art size={size * 0.95} color={spec.color} accent={spec.accent} />
       </View>
+      <View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFillObject,
+          styles.sheen,
+          Platform.OS === 'web' ? ({ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)' } as any) : null,
+        ]}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  outer: {
-    padding: 2,
-    borderRadius: radii.sm,
-    borderWidth: 1,
+  frame: {
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    overflow: 'hidden',
   },
   inner: {
     flex: 1,
-    borderRadius: 2,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glyph: {
-    fontWeight: '700',
-    textAlign: 'center',
+  sheen: {
+    borderRadius: radii.md - 2,
   },
 });

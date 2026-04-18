@@ -3,6 +3,7 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from './types';
 import { FortressScreen } from '../screens/FortressScreen';
+import { FortressManagementScreen } from '../screens/FortressManagementScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { CraftingScreen } from '../screens/CraftingScreen';
 import { ExpeditionMapScreen } from '../screens/ExpeditionMapScreen';
@@ -34,6 +35,7 @@ export function RootNavigator() {
         screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
       >
         <Stack.Screen name="Fortress" component={FortressScreen} />
+        <Stack.Screen name="FortressManagement" component={FortressManagementScreen} />
         <Stack.Screen name="Inventory" component={InventoryScreen} />
         <Stack.Screen name="Crafting" component={CraftingScreen} />
         <Stack.Screen name="ExpeditionMap" component={ExpeditionMapScreen} />
