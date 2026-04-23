@@ -297,7 +297,9 @@ function applyPhysDamage(target: Combatant, raw: number, rng: RNG): { amount: nu
   const mitigated = Math.max(1, raw - target.stats.defense);
   const variance = 0.9 + rng.next() * 0.2; // 0.9..1.1
   const crit = rng.chance(0.05);
-  const amount = Math.round(mitigated * variance * (crit ? CRIT_MULT : 1));
+  const defending = hasStatus(target, 'defend');
+  const defendMult = defending ? 0.5 : 1;
+  const amount = Math.round(mitigated * variance * (crit ? CRIT_MULT : 1) * defendMult);
   target.hp = clamp(target.hp - amount, 0, target.hpMax);
   return { amount, crit };
 }
@@ -312,18 +314,29 @@ function applyMagicDamage(
   const mitigated = Math.max(1, raw - Math.floor(target.stats.defense / 2));
   const variance = 0.9 + rng.next() * 0.2;
   const crit = rng.chance(0.05);
-  const amount = Math.round(mitigated * variance * mod * (crit ? CRIT_MULT : 1));
+  const defending = hasStatus(target, 'defend');
+  const defendMult = defending ? 0.6 : 1;
+  const amount = Math.round(mitigated * variance * mod * (crit ? CRIT_MULT : 1) * defendMult);
   target.hp = clamp(target.hp - amount, 0, target.hpMax);
   return { amount, crit };
 }
 
-function applyAction(state: CombatState, action: Action, rng: RNG): CombatLogEntry[] {
+function applyAction(
+  state: CombatState,
+  action: Action | { kind: 'defend'; actorId: string },
+  rng: RNG,
+): CombatLogEntry[] {
   const log: CombatLogEntry[] = [];
   const actor = state.combatants.find((c) => c.id === action.actorId);
   if (!actor) return log;
 
   if (action.kind === 'skip') {
     log.push({ kind: 'action', actor: actor.id, verb: 'skip', at: state.turn });
+    return log;
+  }
+  if (action.kind === 'defend') {
+    actor.statuses.push({ type: 'defend', turnsLeft: 2 });
+    log.push({ kind: 'action', actor: actor.id, verb: 'defend', at: state.turn });
     return log;
   }
   if (action.kind === 'attack') {
@@ -439,6 +452,62 @@ function pickNextActor(state: CombatState): Combatant | null {
 function actionCost(actor: Combatant): number {
   const speed = Math.max(1, actor.stats.speed);
   return Math.round(BASE_ACTION_COST / (speed / 10));
+}
+
+// Returns the next actor in timeline order, or null if combat is over.
+export function peekNextActor(state: CombatState): Combatant | null {
+  return pickNextActor(state);
+}
+
+export function isPlayerTurn(state: CombatState): boolean {
+  const next = pickNextActor(state);
+  return !!next && next.side === 'ally';
+}
+
+// Apply a player-submitted action (attack/zir/defend/skip).
+// Advances the actor's timeline slot just like an AI turn.
+export function submitPlayerAction(
+  state: CombatState,
+  action: import('../types/combat').PlayerAction,
+  rng: RNG,
+): CombatState {
+  if (state.outcome !== 'ongoing') return state;
+  const next: CombatState = {
+    ...state,
+    combatants: state.combatants.map((c) => ({
+      ...c,
+      statuses: c.statuses.map((s) => ({ ...s })),
+      zirs: c.zirs.map((z) => ({ ...z })),
+    })),
+    log: [...state.log],
+  };
+  const actor = next.combatants.find((c) => c.id === action.actorId);
+  if (!actor) return next;
+
+  // Status tick at top of actor's turn (same as AI).
+  const statusLog = tickStatuses([actor], next);
+  next.log.push(...statusLog);
+  for (const z of actor.zirs) if (z.cooldownLeft > 0) z.cooldownLeft -= 1;
+
+  if (alive(actor)) {
+    const log = applyAction(next, action as any, rng);
+    next.log.push(...log);
+  }
+  actor.timelinePosition += actionCost(actor);
+  next.turn += 1;
+  if (enemiesOf(next, 'ally').length === 0) next.outcome = 'victory';
+  else if (alliesOf(next, 'ally').length === 0) next.outcome = 'defeat';
+  if (next.outcome !== 'ongoing') {
+    next.log.push({ kind: 'end', outcome: next.outcome, at: next.turn });
+  }
+  return next;
+}
+
+// Execute ONE enemy turn via AI (used when the next actor is an enemy).
+export function stepEnemyTurn(state: CombatState, rng: RNG): CombatState {
+  const nextActor = pickNextActor(state);
+  if (!nextActor || nextActor.side === 'ally') return state;
+  return stepCombat(state, rng);
 }
 
 export function stepCombat(state: CombatState, rng: RNG): CombatState {

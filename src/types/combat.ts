@@ -21,7 +21,14 @@ export type StatusEffect =
   | { type: 'bleed'; amount: number; turnsLeft: number }
   | { type: 'poison'; amount: number; turnsLeft: number }
   | { type: 'bless'; amount: number; turnsLeft: number }
-  | { type: 'curse'; turnsLeft: number };
+  | { type: 'curse'; turnsLeft: number }
+  | { type: 'defend'; turnsLeft: number };
+
+export type PlayerAction =
+  | { kind: 'attack'; actorId: string; targetId: string }
+  | { kind: 'zir'; actorId: string; zirId: string; targetId: string }
+  | { kind: 'defend'; actorId: string }
+  | { kind: 'skip'; actorId: string };
 
 export type CombatantKind = 'hero' | 'companion' | 'enemy';
 
